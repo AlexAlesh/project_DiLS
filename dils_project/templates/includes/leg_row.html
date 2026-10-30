@@ -17,7 +17,7 @@
 
     <div class="data-box flex-grow-1 leg-tc">
         <span class="data-label">Транспортная компания</span>
-        <span class="data-value fw-semibold text-break">{{ leg.transport_company.name|default:empty_tc_text|default:"—" }}</span>
+        <span class="data-value fw-semibold text-break">{% firstof leg.transport_company.name empty_tc_text "—" %}</span>
     </div>
     <div class="data-box flex-grow-1 leg-driver">
         <span class="data-label">Водитель</span>
