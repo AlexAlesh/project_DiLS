@@ -5,9 +5,9 @@
 
 {% block content %}
 
-<div class="d-flex align-items-center justify-content-between mb-3">
-    <h1 class="h4 mb-0">Рейсы водителей</h1>
-    <div class="d-flex gap-2">
+<div class="page-header">
+    <h1>Рейсы водителей</h1>
+    <div class="page-actions">
         <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#settingsModal">
             <i class="bi bi-sliders"></i> Настроить поля
         </button>
@@ -15,24 +15,24 @@
 </div>
 
 {# ================= ФИЛЬТРЫ ================= #}
-<div class="tile-panel mb-3" style="padding: 12px !important;">
+<div class="tile-panel">
     <form method="get" class="row g-2 align-items-end">
         <div class="col-md-3">
             <div class="data-box w-100">
                 <span class="data-label">Дата загрузки (от)</span>
-                <input type="date" name="loading_date_from" class="form-control border-0 bg-transparent px-0" value="{{ date_from }}">
+                <input type="date" name="loading_date_from" class="form-control" value="{{ date_from }}">
             </div>
         </div>
         <div class="col-md-3">
             <div class="data-box w-100">
                 <span class="data-label">Дата загрузки (до)</span>
-                <input type="date" name="loading_date_to" class="form-control border-0 bg-transparent px-0" value="{{ date_to }}">
+                <input type="date" name="loading_date_to" class="form-control" value="{{ date_to }}">
             </div>
         </div>
         <div class="col-md-4">
             <div class="data-box w-100">
                 <span class="data-label">Транспортные компании</span>
-                <select name="transport_company" class="form-select border-0 bg-transparent px-0" multiple size="1">
+                <select name="transport_company" class="form-select" multiple size="1">
                     {% for tc in all_tcs %}
                         <option value="{{ tc.pk }}" {% if tc.pk|stringformat:"s" in selected_tcs %}selected{% endif %}>{{ tc.name }}</option>
                     {% endfor %}
@@ -54,7 +54,7 @@
 
             {# Шапка карточки: Номер рейса + ФИО водителя, и кнопка редактирования #}
             <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
-                <span class="badge bg-dark" style="font-size: 13px; padding: 6px 10px;">
+                <span class="badge bg-dark px-2 py-1">
                     Рейс #{{ leg.pk }}: {{ leg.driver.full_name|default:"Водитель не назначен" }}
                 </span>
                 <a href="{% url 'core:request_edit' leg.pk %}" class="btn btn-sm btn-outline-primary py-1 px-3">
@@ -90,7 +90,7 @@
                         <span class="data-label">Заказчик</span>
                         <div class="data-value fw-semibold">{{ leg.trip.customer.name|default:"—" }}</div>
                         {% if leg.trip.customer.phone %}
-                            <div class="text-muted mt-1" style="font-size: 12px;">
+                            <div class="text-muted small mt-1">
                                 <i class="bi bi-telephone"></i> {{ leg.trip.customer.phone }}
                             </div>
                         {% endif %}
@@ -104,7 +104,7 @@
                         <span class="data-label">Менеджер</span>
                         <div class="data-value fw-semibold">{{ leg.trip.manager.get_full_name|default:leg.trip.manager.username|default:"—" }}</div>
                         {% if leg.trip.manager.phone %}
-                            <div class="text-muted mt-1" style="font-size: 12px;">
+                            <div class="text-muted small mt-1">
                                 <i class="bi bi-telephone"></i> {{ leg.trip.manager.phone }}
                             </div>
                         {% endif %}
@@ -135,10 +135,10 @@
                 <div class="col-md-4 col-sm-6">
                     <div class="data-box w-100 h-100">
                         <span class="data-label">Машина</span>
-                        <div class="data-value font-monospace fw-bold" style="font-size: 15px;">
+                        <div class="data-value font-monospace fw-bold">
                             {{ leg.plate_number|default:"—" }}
                         </div>
-                        <div class="text-muted mt-1" style="font-size: 12px;">
+                        <div class="text-muted small mt-1">
                             {{ leg.brand_name|default:"—" }} / {{ leg.vehicle_type_name|default:"—" }}
                         </div>
                     </div>
@@ -149,7 +149,7 @@
                 <div class="col-md-2 col-sm-4">
                     <div class="data-box w-100 h-100">
                         <span class="data-label">Цена</span>
-                        <span class="data-value fw-bold {% if not leg.price %}text-danger{% endif %}" style="font-size: 16px;">
+                        <span class="data-value fw-bold {% if not leg.price %}text-danger{% endif %}">
                             {{ leg.price|format_money }}
                         </span>
                     </div>
@@ -170,7 +170,7 @@
                 <div class="col-md-6">
                     <div class="data-box w-100 h-100">
                         <span class="data-label">Информация по доставке</span>
-                        <span class="data-value text-break" style="font-size: 14px; white-space: pre-wrap;">{{ leg.trip.delivery_info|default:"—" }}</span>
+                        <span class="data-value text-break text-prewrap">{{ leg.trip.delivery_info|default:"—" }}</span>
                     </div>
                 </div>
                 {% endif %}
@@ -179,7 +179,7 @@
                 <div class="col-md-6">
                     <div class="data-box w-100 h-100">
                         <span class="data-label">Комментарий</span>
-                        <span class="data-value text-break" style="font-size: 14px; white-space: pre-wrap;">{{ leg.logist_comment|default:"—" }}</span>
+                        <span class="data-value text-break text-prewrap">{{ leg.logist_comment|default:"—" }}</span>
                     </div>
                 </div>
                 {% endif %}
@@ -189,8 +189,8 @@
     </div>
     {% empty %}
     <div class="card border-0 shadow-sm">
-        <div class="card-body text-center text-muted py-4">
-            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+        <div class="empty-state">
+            <i class="bi bi-inbox"></i>
             Нет рейсов по выбранным фильтрам
         </div>
     </div>
@@ -231,7 +231,7 @@
                     <div class="col-md-6">
                         <h6 class="fw-bold mb-3">ТК по умолчанию</h6>
                         <p class="text-muted small">Эти ТК будут выбраны автоматически при входе на страницу.</p>
-                        <div class="list-group" style="max-height: 250px; overflow-y: auto;">
+                        <div class="list-group scroll-area">
                             {% for tc in all_tcs %}
                             <label class="list-group-item d-flex gap-2">
                                 <input type="checkbox" class="form-check-input"

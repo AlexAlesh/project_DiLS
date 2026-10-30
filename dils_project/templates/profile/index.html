@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% load dils_tags %}
+{% load static dils_tags %}
 
 {% block title %}Профиль · DiLS{% endblock %}
 
 {% block content %}
 
-<div class="d-flex align-items-center justify-content-between mb-3">
-    <h1 class="h4 mb-0">Профиль</h1>
+<div class="page-header">
+    <h1>Профиль</h1>
     <span class="badge text-bg-light border">{{ user_obj.get_role_display }}</span>
 </div>
 
@@ -52,7 +52,7 @@
                 <span class="badge text-bg-light border">{{ directory|length }}</span>
             </div>
 
-            <div class="card-body p-0" style="max-height: 380px; overflow-y: auto;">
+            <div class="card-body p-0 scroll-area">
                 {% if directory %}
                 <ul class="list-group list-group-flush">
                     {% for item in directory %}
@@ -60,7 +60,7 @@
                         <div>
                             <div class="fw-semibold">{{ item.name }}</div>
                             {% if item.contact_person or item.phone %}
-                                <div class="text-muted small mt-1" style="font-size: 11px;">
+                                <div class="text-muted small mt-1">
                                     {% if item.contact_person %}<i class="bi bi-person"></i> {{ item.contact_person }}{% endif %}
                                     {% if item.phone %}<i class="bi bi-telephone ms-2"></i> {{ item.phone }}{% endif %}
                                 </div>
@@ -198,7 +198,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/plate_number.js"></script>
+<script src="{% static 'js/plate_number.js' %}"></script>
 
 <script>
 let currentLookupId = null;
@@ -271,7 +271,7 @@ function renderCustomerAddresses(addresses) {
     }
     addresses.forEach(a => {
         list.innerHTML += `<li class="list-group-item d-flex justify-content-between align-items-center py-1">
-            <span class="text-break" style="font-size: 13px;">${a.info}</span>
+            <span class="text-break small">${a.info}</span>
             <div class="d-flex gap-1">
                 <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" onclick="editAddress(${a.id}, '${a.info.replace(/'/g, "\\'")}')"><i class="bi bi-pencil"></i></button>
                 <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="deleteCustomerAddress(${a.id})" title="Удалить"><i class="bi bi-x"></i></button>

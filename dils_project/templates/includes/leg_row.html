@@ -1,0 +1,75 @@
+{% load dils_tags %}
+{% comment %}
+Плитка одного рейса (TripLeg) — единый вид для списков менеджера и логиста.
+
+Ожидает:
+- leg           — TripLeg
+- index         — порядковый номер рейса (1-based)
+- editable      — "1" если строка кликабельна (редактирование логистом)
+- edit_url      — url редактирования (нужен при editable="1")
+- show_new_badge— "1" чтобы показать бейдж «new»
+- empty_tc_text — текст для пустой ТК (по умолчанию «—»)
+{% endcomment %}
+<div class="d-flex align-items-center gap-2 p-2 rounded border bg-white flex-wrap leg-row {% if editable %}leg-row-editable{% endif %}"
+     {% if editable %}onclick="event.stopPropagation(); window.location.href='{{ edit_url }}'"{% endif %}>
+
+    <span class="badge text-bg-secondary leg-num">Рейс #{{ index }}</span>
+
+    <div class="data-box flex-grow-1 leg-tc">
+        <span class="data-label">Транспортная компания</span>
+        <span class="data-value fw-semibold text-break">{{ leg.transport_company.name|default:empty_tc_text|default:"—" }}</span>
+    </div>
+    <div class="data-box flex-grow-1 leg-driver">
+        <span class="data-label">Водитель</span>
+        <span class="data-value text-break">{{ leg.driver.full_name|default:"—" }}</span>
+    </div>
+    <div class="data-box leg-plate">
+        <span class="data-label">Гос. номер</span>
+        <span class="data-value">
+            <span class="badge bg-light text-dark border font-monospace py-1">{{ leg.plate_number|default:"—" }}</span>
+        </span>
+    </div>
+    <div class="data-box leg-brand">
+        <span class="data-label">Марка / Тип</span>
+        <span class="data-value text-break">{{ leg.brand_name|default:"—" }} / {{ leg.vehicle_type_name|default:"—" }}</span>
+    </div>
+    <div class="data-box leg-price">
+        <span class="data-label">Цена</span>
+        <span class="data-value fw-bold {% if not leg.price %}text-danger{% endif %}">{{ leg.price|format_money }}</span>
+    </div>
+    <div class="data-box leg-payment">
+        <span class="data-label">Тип оплаты</span>
+        <span class="data-value text-break">{{ leg.payment_type.name|default:"—" }}</span>
+    </div>
+    <div class="data-box leg-ttn">
+        <span class="data-label">№ ТТН</span>
+        <span class="data-value">{{ leg.ttn_number|default:"—" }}</span>
+    </div>
+
+    {# Комментарий логиста — отдельной строкой #}
+    {% if leg.logist_comment %}
+    <div class="w-100 mt-1 pt-1 border-top">
+        <span class="text-muted small fw-bold"><i class="bi bi-chat-left-text"></i> Комментарий:</span>
+        <span class="small text-break">{{ leg.logist_comment }}</span>
+    </div>
+    {% endif %}
+
+    {# Статус рейса #}
+    <div class="ms-auto d-flex align-items-center gap-2 pe-2">
+        {% if leg.is_filled %}
+            <span class="badge text-bg-success">Выполнено</span>
+        {% elif leg.is_started %}
+            <span class="badge text-bg-warning">В работе</span>
+        {% else %}
+            <span class="badge text-bg-secondary">Ожидает</span>
+        {% endif %}
+
+        {% if show_new_badge and leg.is_new_for_logist %}
+            <span class="badge text-bg-danger">new</span>
+        {% endif %}
+
+        {% if editable %}
+            <i class="bi bi-pencil-square text-primary fs-5"></i>
+        {% endif %}
+    </div>
+</div>
