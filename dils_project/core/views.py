@@ -11,6 +11,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Prefetch, Q
+from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
@@ -450,14 +451,20 @@ def profile_index(request):
                 return redirect("core:profile_index")
             pk = request.POST.get("lookup_pk")
             if pk:
-                if user.is_logist:
-                    TransportCompany.objects.filter(pk=pk).delete()
-                else:
-                    qs = Customer.objects.filter(pk=pk)
-                    if user.is_manager:
-                        qs = qs.filter(Q(manager=user) | Q(manager__isnull=True))
-                    qs.delete()
-                messages.success(request, "Удалено из справочника.")
+                try:
+                    if user.is_logist:
+                        # delete() instance-метода ТК содержит защиту истории рейсов (ProtectedError)
+                        tc = TransportCompany.objects.filter(pk=pk).first()
+                        if tc:
+                            tc.delete()
+                    else:
+                        qs = Customer.objects.filter(pk=pk)
+                        if user.is_manager:
+                            qs = qs.filter(Q(manager=user) | Q(manager__isnull=True))
+                        qs.delete()
+                    messages.success(request, "Удалено из справочника.")
+                except ProtectedError as exc:
+                    messages.error(request, str(exc))
             return redirect("core:profile_index")
 
         else:
@@ -712,6 +719,8 @@ def ajax_delete_driver(request, pk):
         return JsonResponse({"ok": True})
     except Driver.DoesNotExist:
         return JsonResponse({"error": "Not found"}, status=404)
+    except ProtectedError as exc:
+        return JsonResponse({"error": str(exc)}, status=409)
 
 
 @lookup_permission_required(_fixed_kind("vehicles"))
@@ -722,6 +731,8 @@ def ajax_delete_vehicle(request, pk):
         return JsonResponse({"ok": True})
     except Vehicle.DoesNotExist:
         return JsonResponse({"error": "Not found"}, status=404)
+    except ProtectedError as exc:
+        return JsonResponse({"error": str(exc)}, status=409)
 
 
 @lookup_permission_required(_fixed_kind("drivers"))

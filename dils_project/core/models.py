@@ -4,6 +4,7 @@
 
 import re
 from django.db import models
+from django.db.models.deletion import ProtectedError
 from django.contrib.auth.models import AbstractUser
 
 
@@ -101,6 +102,18 @@ class TransportCompany(models.Model):
         ordering = ['name']
     def __str__(self): return self.name
 
+    def delete(self, *args, **kwargs):
+        """Защищает историю рейсов: ТК, чьи водители/машины участвовали в рейсах,
+        удалить нельзя — иначе каскад CASCADE затрет справочник вместе со следом
+        в выполненных рейсах."""
+        if Driver.objects.filter(transport_company=self, legs__isnull=False).exists() or \
+           Vehicle.objects.filter(transport_company=self, legs__isnull=False).exists():
+            raise ProtectedError(
+                f"Нельзя удалить ТК «{self.name}»: её водители или машины указаны в рейсах.",
+                list(self.legs.all()),
+            )
+        return super().delete(*args, **kwargs)
+
 
 class Brand(models.Model):
     name = models.CharField('Наименование', max_length=100, unique=True)
@@ -142,6 +155,16 @@ class Driver(models.Model):
         unique_together = [('transport_company', 'full_name')]
     def __str__(self): return self.full_name
 
+    def delete(self, *args, **kwargs):
+        """История рейсов не должна затираться: водителя, участвовавшего
+        в рейсах (в т.ч. выполненных), удалить нельзя — только переименовать/перенести."""
+        if self.legs.exists():
+            raise ProtectedError(
+                f"Нельзя удалить водителя «{self.full_name}»: он указан в рейсах.",
+                list(self.legs.all()),
+            )
+        return super().delete(*args, **kwargs)
+
 
 class Vehicle(models.Model):
     transport_company = models.ForeignKey(TransportCompany, on_delete=models.CASCADE, related_name='vehicles', verbose_name='Транспортная компания')
@@ -156,6 +179,16 @@ class Vehicle(models.Model):
         ordering = ['plate_number']
         unique_together = [('transport_company', 'plate_number')]
     def __str__(self): return f"{self.plate_number} ({self.brand.name})"
+
+    def delete(self, *args, **kwargs):
+        """Защищает историю рейсов: машину, указанную в рейсах, удалить нельзя."""
+        if self.legs.exists():
+            raise ProtectedError(
+                f"Нельзя удалить машину «{self.plate_number}»: она указана в рейсах.",
+                list(self.legs.all()),
+            )
+        return super().delete(*args, **kwargs)
+
     def save(self, *args, **kwargs):
         self.plate_number = format_plate_number(self.plate_number)
         super().save(*args, **kwargs)

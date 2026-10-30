@@ -386,7 +386,11 @@ function deleteDriver(pk) {
     if (!canManageLookup) { alert('Недостаточно прав для изменения этого справочника'); return; }
     if (!confirm('Удалить водителя?')) return;
     fetch(`/ajax/driver/${pk}/delete/`, { method: 'POST', headers: {'X-CSRFToken': getCsrf()} })
-    .then(() => loadLookupDetails('transport-companies', currentLookupId));
+    .then(async r => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) { alert(data.error || 'Не удалось удалить водителя'); return; }
+        loadLookupDetails('transport-companies', currentLookupId);
+    });
 }
 
 // --- МАШИНЫ ---
@@ -467,7 +471,11 @@ function deleteVehicle(pk) {
     if (!canManageLookup) { alert('Недостаточно прав для изменения этого справочника'); return; }
     if (!confirm('Удалить машину?')) return;
     fetch(`/ajax/vehicle/${pk}/delete/`, { method: 'POST', headers: {'X-CSRFToken': getCsrf()} })
-    .then(() => loadLookupDetails('transport-companies', currentLookupId));
+    .then(async r => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) { alert(data.error || 'Не удалось удалить машину'); return; }
+        loadLookupDetails('transport-companies', currentLookupId);
+    });
 }
 
 function saveLookupEdit() {
