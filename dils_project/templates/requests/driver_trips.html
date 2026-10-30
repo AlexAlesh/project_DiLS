@@ -258,40 +258,64 @@
 
 {% block extra_js %}
 <script>
-    document.querySelector('[data-pref-save-complex]').addEventListener('click', function() {
-        const btn = this;
-        btn.disabled = true;
+(function () {
+    'use strict';
 
-        const visibleFields = [];
-        document.querySelectorAll('input[data-pref-field="fields"]:checked').forEach(el => {
-            visibleFields.push(el.dataset.prefKey);
+    // CSRF: hidden input на странице → cookie csrftoken → значение из формы GET-фильтров
+    function getCsrf() {
+        var input = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        if (input && input.value) return input.value;
+        var cookie = document.cookie.split('; ').find(function (row) { return row.startsWith('csrftoken='); });
+        if (cookie) return cookie.split('=')[1];
+        return '';
+    }
+
+    function savePref(field, values) {
+        return fetch('{% url "core:ajax_save_preferences" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrf(),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ page: 'driver_trips', field: field, values: values })
+        }).then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json().then(function (data) {
+                if (data && data.error) throw new Error(data.error);
+                return data;
+            });
         });
+    }
 
-        const defaultTcs = [];
-        document.querySelectorAll('input[data-pref-field="default_tcs"]:checked').forEach(el => {
-            defaultTcs.push(parseInt(el.dataset.prefKey, 10));
-        });
+    document.addEventListener('DOMContentLoaded', function () {
+        var btn = document.querySelector('[data-pref-save-complex]');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+            btn.disabled = true;
 
-        const save = (page, field, values) => {
-            return fetch('/ajax/preferences/save/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || window.DiLS?.getCsrfToken() || '',
-                },
-                body: JSON.stringify({ page, field, values })
-            }).then(r => r.json());
-        };
+            var visibleFields = [];
+            document.querySelectorAll('input[data-pref-field="fields"]:checked').forEach(function (el) {
+                visibleFields.push(el.dataset.prefKey);
+            });
 
-        Promise.all([
-            save('driver_trips', 'fields', visibleFields),
-            save('driver_trips', 'default_tcs', defaultTcs)
-        ]).then(() => {
-            window.location.reload();
-        }).catch(err => {
-            alert('Ошибка сохранения');
-            btn.disabled = false;
+            var defaultTcs = [];
+            document.querySelectorAll('input[data-pref-field="default_tcs"]:checked').forEach(function (el) {
+                defaultTcs.push(parseInt(el.dataset.prefKey, 10));
+            });
+
+            Promise.all([
+                savePref('fields', visibleFields),
+                savePref('default_tcs', defaultTcs)
+            ]).then(function () {
+                window.location.reload();
+            }).catch(function (err) {
+                console.error('Сохранение настроек не удалось:', err);
+                alert('Не удалось сохранить настройки (' + err.message + '). Обновите страницу и попробуйте снова.');
+                btn.disabled = false;
+            });
         });
     });
+})();
 </script>
 {% endblock %}
