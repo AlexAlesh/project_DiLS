@@ -109,6 +109,9 @@ class TripManagerForm(forms.ModelForm):
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
+        # trips_count необязателен в POST: если поле отсутствует или пустое,
+        # используем default из модели (1). Модель гарантирует default=1.
+        self.fields["trips_count"].required = False
         q = Q(manager__isnull=True)
         if user and user.is_manager: q |= Q(manager=user)
         if self.instance and self.instance.pk and self.instance.customer_id:
@@ -123,6 +126,13 @@ class TripManagerForm(forms.ModelForm):
         self.fields["customer"].empty_label = "— выберите заказчика —"
         self.fields["loading_date"].input_formats = ["%Y-%m-%d"]
         self.fields["unloading_date"].input_formats = ["%Y-%m-%d"]
+
+    def clean_trips_count(self):
+        # Пустое/отсутствующее значение → default модели (1).
+        value = self.cleaned_data.get("trips_count")
+        if value is None:
+            value = Trip._meta.get_field("trips_count").get_default()
+        return max(1, int(value))
 
     def clean(self):
         cleaned = super().clean()
