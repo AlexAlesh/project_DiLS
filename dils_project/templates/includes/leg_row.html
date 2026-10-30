@@ -15,11 +15,11 @@
 
     <span class="badge text-bg-secondary leg-num">Рейс #{{ index }}</span>
 
-    <div class="data-box leg-tc">
+    <div class="data-box flex-grow-1 leg-tc">
         <span class="data-label">Транспортная компания</span>
         <span class="data-value fw-semibold text-break">{% firstof leg.transport_company.name empty_tc_text "—" %}</span>
     </div>
-    <div class="data-box leg-driver">
+    <div class="data-box flex-grow-1 leg-driver">
         <span class="data-label">Водитель</span>
         <span class="data-value text-break">{{ leg.driver.full_name|default:"—" }}</span>
     </div>
