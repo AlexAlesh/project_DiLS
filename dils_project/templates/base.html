@@ -60,7 +60,7 @@
             <li class="nav-item">
                 <a href="{% url 'core:request_list' %}" class="nav-link text-white d-flex justify-content-between {% if 'request' in request.resolver_match.url_name %}active{% endif %}">
                     <span><i class="bi bi-clipboard-check me-2"></i> Заявки</span>
-                    {% if new_requests_count %}<span class="badge bg-danger rounded-pill">{{ new_requests_count }}</span>{% endif %}
+                    {% if new_legs_count %}<span class="badge bg-danger rounded-pill">{{ new_legs_count }}</span>{% endif %}
                 </a>
             </li>
             {# НОВЫЙ ПУНКТ МЕНЮ #}

@@ -3,18 +3,12 @@
 """
 
 from django import forms
-from django.contrib.auth.forms import AuthenticationForm
 from django.db.models import Q
 
 from .models import (
     Brand, Customer, CustomerAddress, Driver, PaymentType, TransportCompany,
     Trip, TripLeg, User, Vehicle, VehicleType, format_plate_number,
 )
-
-
-class LoginForm(AuthenticationForm):
-    username = forms.CharField(label="Логин", widget=forms.TextInput(attrs={"class": "form-control", "autofocus": True}))
-    password = forms.CharField(label="Пароль", widget=forms.PasswordInput(attrs={"class": "form-control"}))
 
 
 class ProfileForm(forms.ModelForm):
@@ -93,6 +87,15 @@ class VehicleForm(forms.ModelForm):
 # ============================================================
 
 class TripManagerForm(forms.ModelForm):
+    """Форма части менеджера в заявке.
+
+    Поддерживает два способа задания заказчика:
+      1. Выбор из выпадающего списка (поле ``customer``).
+      2. Создание нового заказчика по имени — через скрытое поле
+         ``new_customer_name`` (заполняется JS при вводе текста поиска).
+
+    При отсутствии ``trips_count`` в POST используется default модели (1).
+    """
     new_customer_name = forms.CharField(widget=forms.HiddenInput(), required=False)
 
     class Meta:
@@ -109,8 +112,14 @@ class TripManagerForm(forms.ModelForm):
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
+        # trips_count необязателен в POST: если поле отсутствует или пустое,
+        # используем default из модели (1). Модель гарантирует default=1.
+        self.fields["trips_count"].required = False
+
+        # Ограничиваем queryset заказчика для менеджера: свои + общие.
         q = Q(manager__isnull=True)
-        if user and user.is_manager: q |= Q(manager=user)
+        if user and user.is_manager:
+            q |= Q(manager=user)
         if self.instance and self.instance.pk and self.instance.customer_id:
             q |= Q(pk=self.instance.customer_id)
 
@@ -124,14 +133,51 @@ class TripManagerForm(forms.ModelForm):
         self.fields["loading_date"].input_formats = ["%Y-%m-%d"]
         self.fields["unloading_date"].input_formats = ["%Y-%m-%d"]
 
+    def clean_trips_count(self):
+        # Пустое/отсутствующее значение → default модели (1).
+        value = self.cleaned_data.get("trips_count")
+        if value is None:
+            value = Trip._meta.get_field("trips_count").get_default()
+        return max(1, int(value))
+
     def clean(self):
         cleaned = super().clean()
         customer = cleaned.get("customer")
+
+        # Если заказчик не выбран из списка, но передано имя нового — создаём.
+        if not customer:
+            raw_name = (self.data.get("new_customer_name") or "").strip() \
+                if hasattr(self.data, "get") else ""
+            if raw_name:
+                manager = self.user if (self.user and self.user.is_manager) else None
+                qs = Customer.objects.filter(name__iexact=raw_name)
+                if manager:
+                    qs = qs.filter(Q(manager=manager) | Q(manager__isnull=True))
+                existing = qs.distinct().first()
+                if existing:
+                    # Защита от дублей: переиспользуем существующего клиента.
+                    if not existing.manager and manager:
+                        existing.manager = manager
+                        existing.save(update_fields=["manager"])
+                    cleaned["customer"] = existing
+                    self.instance.customer = existing
+                    customer = existing
+                else:
+                    customer = Customer.objects.create(name=raw_name, manager=manager)
+                    cleaned["customer"] = customer
+                    self.instance.customer = customer
+
         if not customer:
             self.add_error("customer", "Выберите заказчика из списка.")
         elif customer and not customer.manager and self.user and self.user.is_manager:
             customer.manager = self.user
             customer.save()
+
+        # Проверка дат: разгрузка не раньше загрузки.
+        date_start = cleaned.get("loading_date")
+        date_end = cleaned.get("unloading_date")
+        if date_start and date_end and date_end < date_start:
+            self.add_error("unloading_date", "Дата разгрузки не может быть раньше даты загрузки.")
         return cleaned
 
     def save(self, commit=True):
@@ -153,8 +199,14 @@ class TripManagerForm(forms.ModelForm):
                 for _ in range(target_count - current_count):
                     TripLeg.objects.create(trip=instance)
             elif target_count < current_count:
-                empty_legs = instance.legs.filter(transport_company__isnull=True, driver__isnull=True, vehicle__isnull=True, price__isnull=True)
-                for leg in empty_legs[current_count - target_count:]:
+                # Удаляем только пустые рейсы (с конца); заполненные не трогаем.
+                empty_legs = list(instance.legs.filter(
+                    transport_company__isnull=True, driver__isnull=True,
+                    vehicle__isnull=True, price__isnull=True,
+                    payment_type__isnull=True, ttn_number='',
+                ).order_by('-id'))
+                to_delete = len(empty_legs) - target_count
+                for leg in empty_legs[:max(to_delete, 0)]:
                     leg.delete()
         return instance
 
@@ -177,7 +229,18 @@ class TripLogistForm(forms.ModelForm):
             "logist_comment": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
         }
 
-    # ... (остальной код __init__ и clean без изменений)
+    def clean(self):
+        cleaned = super().clean()
+        company = cleaned.get("transport_company")
+        driver = cleaned.get("driver")
+        vehicle = cleaned.get("vehicle")
+        # Водитель и машина должны принадлежать выбранной ТК.
+        if company:
+            if driver and driver.transport_company_id != company.pk:
+                self.add_error("driver", f"Водитель «{driver}» не принадлежит ТК «{company}».")
+            if vehicle and vehicle.transport_company_id != company.pk:
+                self.add_error("vehicle", f"Машина «{vehicle}» не принадлежит ТК «{company}».")
+        return cleaned
 
 
 # ============================================================

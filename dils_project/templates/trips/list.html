@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load dils_tags %}
+{% load static dils_tags %}
 
 {% block title %}Заявки · DiLS{% endblock %}
 
@@ -13,21 +13,21 @@
 
     <div class="card shadow-sm trip-card"
          data-href="{% url 'core:trip_detail' trip.pk %}"
-         style="border: 2px solid {{ trip.manager.color|default:'#0d6efd' }}; border-left: 6px solid {{ trip.manager.color|default:'#0d6efd' }}; border-radius: 6px; overflow: hidden;">
+         style="border: 1px solid {{ trip.manager.color|default:'#dee2e6' }}; border-left: 6px solid {{ trip.manager.color|default:'#0d6efd' }};">
 
         {# ==================== БЛОК 1: МЕНЕДЖЕР ==================== #}
         <div class="card-body p-2 px-3" style="background-color: {{ trip.manager.bg_color|default:'#ffffff' }};">
             <div class="d-flex align-items-start gap-2 w-100">
 
-                <div class="d-flex flex-column align-items-center flex-shrink-0 mt-1" style="width: 90px;">
-                    <span class="badge w-100" style="font-size: 11px; letter-spacing: 1px; background-color: {{ trip.manager.role_color|default:'#6c757d' }}; color: #fff;">
+                <div class="d-flex flex-column align-items-center role-col mt-1">
+                    <span class="badge role-badge" style="background-color: {{ trip.manager.role_color|default:'#6c757d' }};">
                         МЕНЕДЖЕР
                     </span>
-                    <span class="badge w-100 mt-1" style="font-size: 11px; background-color: {{ trip.manager.role_color|default:'#6c757d' }}; color: #fff;" title="Номер заявки">
+                    <span class="badge role-badge mt-1" style="background-color: {{ trip.manager.role_color|default:'#6c757d' }};" title="Номер заявки">
                         Заявка #{{ trip.pk }}
                     </span>
                     {% if trip.trips_count > 1 %}
-                        <span class="badge w-100 mt-1" style="font-size: 11px; background-color: {{ trip.manager.role_color|default:'#6c757d' }}; color: #fff;" title="Количество рейсов в заявке">
+                        <span class="badge role-badge mt-1" style="background-color: {{ trip.manager.role_color|default:'#6c757d' }};" title="Количество рейсов в заявке">
                             <i class="bi bi-truck"></i> x{{ trip.trips_count }}
                         </span>
                     {% endif %}
@@ -80,13 +80,13 @@
             </div>
         </div>
 
-        {# ==================== БЛОК 2: РЕЙСЫ (ЦВЕТА ЛОГИСТА) ==================== #}
-        <hr class="m-0" style="border-top: 3px solid rgba(0, 0, 0, 0.2); opacity: 1;">
+        {# ==================== БЛОК 2: РЕЙСЫ ==================== #}
+        <hr class="trip-divider">
 
         <div class="card-body p-2 px-3" style="background-color: {% if logist_user %}{{ logist_user.bg_color }}{% else %}#f8f9fa{% endif %};">
             <div class="d-flex align-items-center gap-2 mb-2">
-                <span class="badge" style="font-size: 11px; letter-spacing: 1px; background-color: {% if logist_user %}{{ logist_user.role_color }}{% else %}#0d6efd{% endif %}; color: #fff;">
-                    РЕЙСЫ ({{ trip.legs.count }})
+                <span class="badge role-badge w-auto px-2 py-1" style="background-color: {% if logist_user %}{{ logist_user.role_color }}{% else %}#0d6efd{% endif %};">
+                    Рейсы ({{ trip.legs.count }} из {{ trip.trips_count }})
                 </span>
                 <a href="{% url 'core:trip_history' trip.pk %}" class="ms-auto text-decoration-none small text-primary">
                     <i class="bi bi-clock-history"></i> История изменений
@@ -95,70 +95,15 @@
 
             <div class="d-flex flex-column gap-2">
                 {% for leg in trip.legs.all %}
-                <div class="d-flex align-items-center gap-2 p-2 rounded border bg-white flex-wrap" style="border-color: #dee2e6 !important;">
-                    <span class="badge bg-secondary" style="font-size: 10px;">Рейс #{{ forloop.counter }}</span>
-
-                    <div class="data-box flex-grow-1" style="min-width: 150px;">
-                        <span class="data-label">Транспортная компания</span>
-                        <span class="data-value fw-semibold text-break">{{ leg.transport_company.name|default:"Ожидает логиста" }}</span>
-                    </div>
-                    <div class="data-box flex-grow-1" style="min-width: 150px;">
-                        <span class="data-label">Водитель</span>
-                        <span class="data-value text-break">{{ leg.driver.full_name|default:"—" }}</span>
-                    </div>
-                    <div class="data-box" style="min-width: 120px;">
-                        <span class="data-label">Гос. номер</span>
-                        <span class="data-value">
-                            <span class="badge bg-light text-dark border font-monospace py-1" style="font-size: 12px;">{{ leg.plate_number|default:"—" }}</span>
-                        </span>
-                    </div>
-                    <div class="data-box" style="min-width: 130px;">
-                        <span class="data-label">Марка / Тип</span>
-                        <span class="data-value text-break">{{ leg.brand_name|default:"—" }} / {{ leg.vehicle_type_name|default:"—" }}</span>
-                    </div>
-                    <div class="data-box" style="min-width: 100px;">
-                        <span class="data-label">Цена</span>
-                        <span class="data-value fw-bold {% if not leg.price %}text-danger{% endif %}">
-                            {{ leg.price|format_money }}
-                        </span>
-                    </div>
-
-                    <div class="data-box" style="min-width: 120px;">
-                        <span class="data-label">Тип оплаты</span>
-                        <span class="data-value text-break">{{ leg.payment_type.name|default:"—" }}</span>
-                    </div>
-                    <div class="data-box" style="min-width: 80px;">
-                        <span class="data-label">№ ТТН</span>
-                        <span class="data-value">{{ leg.ttn_number|default:"—" }}</span>
-                    </div>
-
-                    {# ВЫВОД КОММЕНТАРИЯ ОТДЕЛЬНОЙ СТРОКОЙ #}
-                    {% if leg.logist_comment %}
-                    <div class="w-100 mt-1 pt-1 border-top">
-                        <span class="text-muted small fw-bold"><i class="bi bi-chat-left-text"></i> Комментарий логиста:</span>
-                        <span class="small text-break">{{ leg.logist_comment }}</span>
-                    </div>
-                    {% endif %}
-
-                    {# Статус рейса #}
-                    <div class="ms-auto">
-                        {% if leg.is_filled %}
-                            <span class="badge text-bg-success">Выполнено</span>
-                        {% elif leg.is_started %}
-                            <span class="badge text-bg-warning">В работе</span>
-                        {% else %}
-                            <span class="badge text-bg-secondary">Ожидает</span>
-                        {% endif %}
-                    </div>
-                </div>
+                {% include "includes/leg_row.html" with leg=leg index=forloop.counter editable="0" empty_tc_text="Ожидает логиста" %}
                 {% endfor %}
             </div>
         </div>
     </div>
     {% empty %}
     <div class="card border-0 shadow-sm">
-        <div class="card-body text-center text-muted py-4">
-            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+        <div class="empty-state">
+            <i class="bi bi-inbox"></i>
             Нет заявок по выбранным фильтрам
         </div>
     </div>
@@ -170,5 +115,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/filters.js"></script>
+<script src="{% static 'js/filters.js' %}"></script>
 {% endblock %}

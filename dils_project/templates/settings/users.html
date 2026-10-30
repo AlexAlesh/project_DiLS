@@ -4,9 +4,9 @@
 
 {% block content %}
 
-<div class="d-flex align-items-center justify-content-between mb-3">
-    <h1 class="h4 mb-0">Пользователи</h1>
-    <div class="d-flex gap-2">
+<div class="page-header">
+    <h1>Пользователи</h1>
+    <div class="page-actions">
         <a href="/admin/core/user/add/" target="_blank" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-lg"></i> Добавить в Django Admin
         </a>
@@ -22,7 +22,7 @@
         <div class="card-body p-3 d-flex align-items-center flex-wrap gap-3">
 
             {# Иконка и логин #}
-            <div class="d-flex align-items-center gap-3" style="min-width: 250px;">
+            <div class="d-flex align-items-center gap-3" style="min-width: 220px;">
                 <i class="bi bi-person-circle fs-3 text-secondary"></i>
                 <div>
                     <div class="fw-bold fs-6">{{ u.get_full_name|default:"Без имени" }}</div>
@@ -74,8 +74,8 @@
     </div>
     {% empty %}
     <div class="card border-0 shadow-sm">
-        <div class="card-body text-center text-muted py-4">
-            <i class="bi bi-people fs-3 d-block mb-2"></i>
+        <div class="empty-state">
+            <i class="bi bi-people"></i>
             Нет пользователей
         </div>
     </div>

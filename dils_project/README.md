@@ -131,11 +131,9 @@ dils_project/
 │   │   └── dils_tags.py
 │   ├── services/
 │   │   ├── trip_service.py
-│   │   ├── report_service.py
-│   │   └── parser_service.py
+│   │   └── report_service.py
 │   ├── management/commands/
 │   │   └── seed_data.py
-│   └── tests/
 ├── templates/               # HTML-шаблоны
 ├── static/                  # CSS/JS
 ├── media/                   # загружаемые файлы (сейчас пусто)
@@ -162,12 +160,10 @@ dils_project/
 
 ## Что в работе / следующие итерации
 
-- 🧾 Парсер «Информация по доставке» — отдельный модуль (`parser_service.py`, заглушка)
-- 📈 Расширенные отчёты: группировки по ТК / водителям / машинам
-  (`report_service.py` готов, но ещё не подключён к views)
+- 🧾 Парсер «Информация по доставке» (regex/NLP-разбор текста в структурированные поля)
 - 📱 Мобильное меню (offcanvas)
 - 🔁 Импорт/экспорт в Excel
-- 🧪 Тесты (`core/tests/` — заглушки)
+- 🧪 Тесты — будут написаны после завершения основной функциональности
 
 ---
 

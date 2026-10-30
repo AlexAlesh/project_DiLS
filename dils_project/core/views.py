@@ -11,6 +11,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Prefetch, Q
+from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
@@ -30,9 +31,9 @@ from .services.trip_service import (
     save_logist_part, save_manager_part, trips_base_queryset, legs_base_queryset,
 )
 from .utils import (
-    REPORTS_DASHBOARDS, REPORTS_FILTERS, REQUESTS_DASHBOARDS,
+    PAGE_SIZE, REPORTS_DASHBOARDS, REPORTS_FILTERS, REQUESTS_DASHBOARDS,
     REQUESTS_FILTERS, TRIPS_DASHBOARDS, TRIPS_FILTERS,
-    apply_filters, compute_dashboards, parse_date,
+    apply_dashboard_params, apply_filters, compute_dashboards, parse_date,
 )
 
 
@@ -56,6 +57,63 @@ def admin_required(view):
             raise PermissionDenied
         return view(request, *args, **kwargs)
     return wrapper
+
+
+# Разграничение прав на справочники:
+#   - заказчики и их адреса — ведёт менеджер (и админ);
+#   - ТК, водители, машины, марки, типы ТС, типы оплаты — ведёт логист (и админ).
+_LOOKUP_OWNER_ROLES = {
+    "customers": (User.ROLE_MANAGER,),
+    "customer-addresses": (User.ROLE_MANAGER,),
+    "transport-companies": (User.ROLE_LOGIST,),
+    "drivers": (User.ROLE_LOGIST,),
+    "vehicles": (User.ROLE_LOGIST,),
+    "brands": (User.ROLE_LOGIST,),
+    "vehicle-types": (User.ROLE_LOGIST,),
+    "payment-types": (User.ROLE_LOGIST,),
+}
+
+
+def _can_manage_lookup(user, kind):
+    """Проверка права пользователя на изменение записи справочника `kind`."""
+    if user.is_admin_role:
+        return True
+    return user.role in _LOOKUP_OWNER_ROLES.get(kind, ())
+
+
+def lookup_permission_required(get_kind):
+    """Декоратор AJAX-эндпоинтов управления справочниками.
+
+    `get_kind` — функция, возвращающая вид справочника по аргументам view
+    (например, kwargs["kind"] или связка kind+pk). Для AJAX-эндпоинтов
+    вместо 403 возвращается JSON с ошибкой, чтобы фронт корректно показал alert.
+    """
+    def decorator(view):
+        @wraps(view)
+        @login_required
+        def wrapper(request, *args, **kwargs):
+            kind = get_kind(request, kwargs)
+            if not _can_manage_lookup(request.user, kind):
+                return JsonResponse({"error": "Недостаточно прав для изменения этого справочника"}, status=403)
+            return view(request, *args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def _lookup_kind_from_url(request, kwargs):
+    return kwargs.get("kind")
+
+
+def _fixed_kind(kind):
+    """Getter, всегда возвращающий фиксированный вид справочника."""
+    return lambda request, kwargs: kind
+
+
+def _address_kind(request, kwargs):
+    """Для эндпоинтов адресов заказчика: если адрес не найден, разрешаем
+    пройти дальше — view сам вернёт корректный 404."""
+    exists = CustomerAddress.objects.filter(pk=kwargs.get("pk")).exists()
+    return "customer-addresses" if exists else "customers"
 
 
 @login_required
@@ -87,24 +145,17 @@ def _build_list_context(request, *, kind):
             elif m_filter != "":
                 qs = qs.filter(manager_id=m_filter)
 
+        # Черновики скрыты, пока не выбран статус «черновик» явно.
         if request.GET.get("status") != Trip.STATUS_DRAFT:
             qs = qs.exclude(status=Trip.STATUS_DRAFT)
 
+        # Дашборды считаются ПОСЛЕ всех пользовательских фильтров, но БЕЗ
+        # dashboard-параметров (status/no_driver/no_price) — иначе счётчики
+        # зависели бы от уже выбранной карточки и «схлопывались».
         dashboards = compute_dashboards(qs, visible_dashboards, dashboards_registry, request=request)
 
-        if request.GET.get("no_driver") == "1":
-            qs = qs.filter(legs__driver__isnull=True).distinct()
-        if request.GET.get("no_price") == "1":
-            qs = qs.filter(legs__price__isnull=True).distinct()
-
-        status_param = request.GET.get("status")
-        if status_param in (Trip.STATUS_COMPLETED, Trip.STATUS_IN_WORK, Trip.STATUS_DRAFT, Trip.STATUS_SENT_TO_WORK):
-            if status_param == Trip.STATUS_IN_WORK:
-                qs = qs.filter(status__in=[Trip.STATUS_SENT_TO_WORK, Trip.STATUS_IN_WORK])
-            else:
-                qs = qs.filter(status=status_param)
-
-        paginator = Paginator(qs, 50)
+        qs = apply_dashboard_params(qs, request)
+        paginator = Paginator(qs, PAGE_SIZE)
         page_obj = paginator.get_page(request.GET.get("page"))
 
     else: # requests (Логист)
@@ -116,18 +167,10 @@ def _build_list_context(request, *, kind):
         legs_qs = apply_filters(legs_base_queryset(), request.GET, visible_filters, filters_registry, is_leg=True)
         legs_qs = legs_qs.exclude(trip__status=Trip.STATUS_DRAFT)
 
+        # Дашборды считаются ПОСЛЕ всех пользовательских фильтров, но БЕЗ
+        # dashboard-параметров — те же правила, что и для заявок менеджера.
         dashboards = compute_dashboards(legs_qs, visible_dashboards, dashboards_registry, request=request)
-
-        if request.GET.get("no_driver") == "1":
-            legs_qs = legs_qs.filter(driver__isnull=True)
-        if request.GET.get("no_price") == "1":
-            legs_qs = legs_qs.filter(price__isnull=True)
-
-        status_param = request.GET.get("status")
-        if status_param == 'completed':
-            legs_qs = legs_qs.filter(transport_company__isnull=False, driver__isnull=False, vehicle__isnull=False, price__isnull=False, payment_type__isnull=False)
-        elif status_param == 'in_work':
-            legs_qs = legs_qs.exclude(transport_company__isnull=False, driver__isnull=False, vehicle__isnull=False, price__isnull=False, payment_type__isnull=False)
+        legs_qs = apply_dashboard_params(legs_qs, request)
 
         trip_ids = legs_qs.values_list('trip_id', flat=True).distinct()
 
@@ -140,7 +183,7 @@ def _build_list_context(request, *, kind):
             'manager', 'customer'
         ).prefetch_related(prefetch).order_by('-created_at')
 
-        paginator = Paginator(qs, 50)
+        paginator = Paginator(qs, PAGE_SIZE)
         page_obj = paginator.get_page(request.GET.get("page"))
 
     return {
@@ -313,7 +356,7 @@ def driver_trips_list(request):
     # 5. Поля и пагинация
     visible_fields = prefs.driver_trips_visible_fields or UserPreferences.DRIVER_TRIPS_DEFAULT_FIELDS
 
-    paginator = Paginator(qs, 50)
+    paginator = Paginator(qs, PAGE_SIZE)
     page_obj = paginator.get_page(request.GET.get("page"))
 
     all_tcs = TransportCompany.objects.all().order_by("name")
@@ -370,7 +413,13 @@ def profile_index(request):
     user = request.user
 
     if request.method == "POST":
+        # Вид справочника в POST-запросах профиля определяется ролью пользователя.
+        directory_kind = "transport-companies" if user.is_logist else "customers"
+
         if "add_lookup" in request.POST:
+            if not _can_manage_lookup(user, directory_kind):
+                messages.error(request, "Недостаточно прав для изменения этого справочника.")
+                return redirect("core:profile_index")
             name = (request.POST.get("lookup_name") or "").strip()
             if name:
                 if user.is_logist:
@@ -382,16 +431,25 @@ def profile_index(request):
             return redirect("core:profile_index")
 
         elif "delete_lookup" in request.POST:
+            if not _can_manage_lookup(user, directory_kind):
+                messages.error(request, "Недостаточно прав для изменения этого справочника.")
+                return redirect("core:profile_index")
             pk = request.POST.get("lookup_pk")
             if pk:
-                if user.is_logist:
-                    TransportCompany.objects.filter(pk=pk).delete()
-                else:
-                    qs = Customer.objects.filter(pk=pk)
-                    if user.is_manager:
-                        qs = qs.filter(Q(manager=user) | Q(manager__isnull=True))
-                    qs.delete()
-                messages.success(request, "Удалено из справочника.")
+                try:
+                    if user.is_logist:
+                        # delete() instance-метода ТК содержит защиту истории рейсов (ProtectedError)
+                        tc = TransportCompany.objects.filter(pk=pk).first()
+                        if tc:
+                            tc.delete()
+                    else:
+                        qs = Customer.objects.filter(pk=pk)
+                        if user.is_manager:
+                            qs = qs.filter(Q(manager=user) | Q(manager__isnull=True))
+                        qs.delete()
+                    messages.success(request, "Удалено из справочника.")
+                except ProtectedError as exc:
+                    messages.error(request, str(exc))
             return redirect("core:profile_index")
 
         else:
@@ -502,7 +560,7 @@ def ajax_search(request, kind):
 # AJAX: Создание и сохранение настроек
 # ============================================================
 
-@login_required
+@lookup_permission_required(_lookup_kind_from_url)
 @require_POST
 def ajax_create_lookup(request, kind):
     if kind not in _SEARCH_MAP: return JsonResponse({"error": "unknown kind"}, status=400)
@@ -587,6 +645,8 @@ _PREF_ATTR_MAP = {
 @login_required
 @require_GET
 def ajax_get_lookup_details(request, kind, pk):
+    # Чтение деталей доступно всем ролям (справочники видны в формах),
+    # но скрытые поля редакторов в UI включаются по правам (см. can_manage).
     try:
         if kind == "transport-companies":
             tc = TransportCompany.objects.get(pk=pk)
@@ -595,21 +655,23 @@ def ajax_get_lookup_details(request, kind, pk):
             return JsonResponse({
                 "id": tc.pk, "name": tc.name, "contact_person": tc.contact_person,
                 "phone": tc.phone, "email": tc.email,
-                "drivers": drivers, "vehicles": vehicles
+                "drivers": drivers, "vehicles": vehicles,
+                "can_manage": _can_manage_lookup(request.user, kind),
             })
         elif kind == "customers":
             c = Customer.objects.get(pk=pk)
             addresses = [{"id": a.pk, "info": a.info} for a in c.addresses.all()]
             return JsonResponse({
                 "id": c.pk, "name": c.name, "contact_person": c.contact_person,
-                "phone": c.phone, "email": c.email, "addresses": addresses
+                "phone": c.phone, "email": c.email, "addresses": addresses,
+                "can_manage": _can_manage_lookup(request.user, kind),
             })
     except (TransportCompany.DoesNotExist, Customer.DoesNotExist):
         return JsonResponse({"error": "Not found"}, status=404)
     return JsonResponse({"error": "Unknown kind"}, status=400)
 
 
-@login_required
+@lookup_permission_required(_lookup_kind_from_url)
 @require_POST
 def ajax_edit_lookup(request, kind, pk):
     name = (request.POST.get("name") or "").strip()
@@ -634,7 +696,7 @@ def ajax_edit_lookup(request, kind, pk):
         return JsonResponse({"error": "Not found"}, status=404)
 
 
-@login_required
+@lookup_permission_required(_fixed_kind("drivers"))
 @require_POST
 def ajax_delete_driver(request, pk):
     try:
@@ -642,9 +704,11 @@ def ajax_delete_driver(request, pk):
         return JsonResponse({"ok": True})
     except Driver.DoesNotExist:
         return JsonResponse({"error": "Not found"}, status=404)
+    except ProtectedError as exc:
+        return JsonResponse({"error": str(exc)}, status=409)
 
 
-@login_required
+@lookup_permission_required(_fixed_kind("vehicles"))
 @require_POST
 def ajax_delete_vehicle(request, pk):
     try:
@@ -652,9 +716,11 @@ def ajax_delete_vehicle(request, pk):
         return JsonResponse({"ok": True})
     except Vehicle.DoesNotExist:
         return JsonResponse({"error": "Not found"}, status=404)
+    except ProtectedError as exc:
+        return JsonResponse({"error": str(exc)}, status=409)
 
 
-@login_required
+@lookup_permission_required(_fixed_kind("drivers"))
 @require_POST
 def ajax_edit_driver(request, pk):
     try:
@@ -670,7 +736,7 @@ def ajax_edit_driver(request, pk):
         return JsonResponse({"error": "Not found"}, status=404)
 
 
-@login_required
+@lookup_permission_required(_fixed_kind("vehicles"))
 @require_POST
 def ajax_edit_vehicle(request, pk):
     try:
@@ -689,7 +755,7 @@ def ajax_edit_vehicle(request, pk):
         return JsonResponse({"error": "Not found"}, status=404)
 
 
-@login_required
+@lookup_permission_required(_address_kind)
 @require_POST
 def ajax_delete_customer_address(request, pk):
     try:
@@ -699,7 +765,7 @@ def ajax_delete_customer_address(request, pk):
         return JsonResponse({"error": "Not found"}, status=404)
 
 
-@login_required
+@lookup_permission_required(_fixed_kind("customers"))
 @require_POST
 def ajax_add_customer_address(request, pk):
     info = (request.POST.get("info") or "").strip()
@@ -712,7 +778,7 @@ def ajax_add_customer_address(request, pk):
         return JsonResponse({"error": "Customer not found"}, status=404)
 
 
-@login_required
+@lookup_permission_required(_address_kind)
 @require_POST
 def ajax_edit_customer_address(request, pk):
     info = (request.POST.get("info") or "").strip()
