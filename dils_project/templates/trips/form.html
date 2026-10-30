@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% load dils_tags %}
+
+{% block title %}
+    {% if mode == "create" %}Новая заявка{% else %}Заявка #{{ trip.pk }} — редактирование{% endif %} · DiLS
+{% endblock %}
+
+{% block content %}
+
+<div class="row justify-content-center">
+    <div class="col-12 col-xl-10">
+
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h1 class="h4 mb-0">
+                {% if mode == "create" %}Новая заявка{% else %}Заявка #{{ trip.pk }} — редактирование{% endif %}
+            </h1>
+            <a href="{% url 'core:trip_list' %}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left"></i> Назад
+            </a>
+        </div>
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-danger py-2 small">
+            {% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}
+        </div>
+        {% endif %}
+
+        <form method="post" novalidate {% if form.new_customer_name %}data-form-role="manager"{% else %}data-form-role="logist"{% endif %}>
+            {% csrf_token %}
+            {{ form.new_customer_name }}
+
+            {% if form.new_customer_name %}
+            {# ============================ МЕНЕДЖЕР ============================ #}
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white py-2">
+                    <i class="bi bi-person-badge me-1"></i> Данные менеджера
+                </div>
+                <div class="card-body">
+                    <div class="row g-2">
+
+                        {# Дата загрузки #}
+                        <div class="col-md-4">
+                            <div class="data-box w-100">
+                                <span class="data-label">{{ form.loading_date.label }}</span>
+                                {{ form.loading_date }}
+                            </div>
+                            {% if form.loading_date.errors %}<div class="text-danger small mt-1">{{ form.loading_date.errors|join:", " }}</div>{% endif %}
+                        </div>
+
+                        {# Дата разгрузки #}
+                        <div class="col-md-4">
+                            <div class="data-box w-100">
+                                <span class="data-label">{{ form.unloading_date.label }}</span>
+                                {{ form.unloading_date }}
+                            </div>
+                            {% if form.unloading_date.errors %}<div class="text-danger small mt-1">{{ form.unloading_date.errors|join:", " }}</div>{% endif %}
+                        </div>
+
+                        {# Количество рейсов #}
+                        <div class="col-md-4">
+                            <div class="data-box w-100">
+                                <span class="data-label">Количество рейсов</span>
+                                <div style="padding: 4px 8px;">
+                                    {{ form.trips_count }}
+                                </div>
+                            </div>
+                            {% if form.trips_count.errors %}<div class="text-danger small mt-1">{{ form.trips_count.errors|join:", " }}</div>{% endif %}
+                        </div>
+
+                        {# Заказчик #}
+                        <div class="col-md-6">
+                            <div class="data-box w-100">
+                                <span class="data-label">{{ form.customer.label }}</span>
+                                <div class="d-flex align-items-center w-100">
+                                    <div class="flex-grow-1">
+                                        {{ form.customer }}
+                                    </div>
+                                    <button type="button" class="btn btn-outline-primary btn-sm ms-1" data-bs-toggle="modal" data-bs-target="#createCustomerModal" title="Создать нового заказчика">
+                                        <i class="bi bi-plus-lg"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            {% if form.customer.errors %}<div class="text-danger small mt-1">{{ form.customer.errors|join:", " }}</div>{% endif %}
+                        </div>
+
+                        {# Менеджер (только чтение) #}
+                        <div class="col-md-6">
+                            <div class="data-box w-100">
+                                <span class="data-label">Менеджер</span>
+                                <input type="text" class="form-control border-0 bg-transparent px-0" readonly
+                                       value="{% if trip %}{{ trip.manager_display }}{% else %}{{ user.get_full_name|default:user.username }}{% if user.phone %} / {{ user.phone }}{% endif %}{% if user.email %} / {{ user.email }}{% endif %}{% endif %}">
+                            </div>
+                        </div>
+
+                        {# Информация по доставке #}
+                        <div class="col-12 mt-3">
+                            <div class="data-box w-100">
+                                <span class="data-label">{{ form.delivery_info.label }}</span>
+                                <div style="padding: 4px 8px;">
+                                    {{ form.delivery_info }}
+                                </div>
+                            </div>
+
+                            {# БЛОК С ИСТОРИЕЙ АДРЕСОВ #}
+                            <div id="customer-addresses-container" class="mt-2 d-none">
+                                <span class="text-muted small fw-bold text-uppercase" style="font-size: 10px;">Ранее использованные адреса:</span>
+                                <div id="customer-addresses-list" class="d-flex flex-wrap gap-1 mt-1"></div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            {# ============================ ЛОГИСТ ============================ #}
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+                    <span><i class="bi bi-truck me-1"></i> Данные логиста</span>
+                    {% if trip %}<small class="text-muted">Заявка #{{ trip.pk }} от {{ trip.created_at|date:"d.m.Y H:i" }}</small>{% endif %}
+                </div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <div class="data-box w-100">
+                                <span class="data-label">{{ form.transport_company.label }}</span>
+                                <div class="input-group">
+                                    {{ form.transport_company }}
+                                    <button type="button" class="btn btn-outline-secondary border-0" data-bs-toggle="modal" data-bs-target="#createTransportCompanyModal"><i class="bi bi-plus-lg"></i></button>
+                                </div>
+                            </div>
+                            {% if form.transport_company.errors %}<div class="text-danger small mt-1">{{ form.transport_company.errors|join:", " }}</div>{% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="data-box w-100">
+                                <span class="data-label">{{ form.driver.label }}</span>
+                                <div class="input-group">
+                                    {{ form.driver }}
+                                    <button type="button" class="btn btn-outline-secondary border-0" data-bs-toggle="modal" data-bs-target="#createDriverModal"><i class="bi bi-plus-lg"></i></button>
+                                </div>
+                            </div>
+                            {% if form.driver.errors %}<div class="text-danger small mt-1">{{ form.driver.errors|join:", " }}</div>{% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="data-box w-100">
+                                <span class="data-label">{{ form.vehicle.label }} (Гос. номер)</span>
+                                <div class="input-group">
+                                    {{ form.vehicle }}
+                                    <button type="button" class="btn btn-outline-secondary border-0" data-bs-toggle="modal" data-bs-target="#createVehicleModal"><i class="bi bi-plus-lg"></i></button>
+                                </div>
+                            </div>
+                            {% if form.vehicle.errors %}<div class="text-danger small mt-1">{{ form.vehicle.errors|join:", " }}</div>{% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="data-box w-100">
+                                <span class="data-label">{{ form.price.label }} (руб.)</span>
+                                <div style="padding: 4px 8px;">
+                                    {{ form.price }}
+                                </div>
+                            </div>
+                            {% if form.price.errors %}<div class="text-danger small mt-1">{{ form.price.errors|join:", " }}</div>{% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="data-box w-100">
+                                <span class="data-label">{{ form.payment_type.label }}</span>
+                                <div class="input-group">
+                                    {{ form.payment_type }}
+                                    <button type="button" class="btn btn-outline-secondary border-0" data-bs-toggle="modal" data-bs-target="#createPaymentTypeModal"><i class="bi bi-plus-lg"></i></button>
+                                </div>
+                            </div>
+                            {% if form.payment_type.errors %}<div class="text-danger small mt-1">{{ form.payment_type.errors|join:", " }}</div>{% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="data-box w-100">
+                                <span class="data-label">{{ form.ttn_number.label }}</span>
+                                <div style="padding: 4px 8px;">
+                                    {{ form.ttn_number }}
+                                </div>
+                            </div>
+                            {% if form.ttn_number.errors %}<div class="text-danger small mt-1">{{ form.ttn_number.errors|join:", " }}</div>{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="d-flex gap-2 mb-5">
+                <button type="submit" class="btn btn-primary px-4">
+                    <i class="bi bi-check-lg"></i> Сохранить
+                </button>
+                <a href="{% url 'core:trip_list' %}" class="btn btn-outline-secondary px-4">
+                    Отмена
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# Модалки создания #}
+{% if form.new_customer_name %}
+<div class="modal fade" id="createCustomerModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Новый заказчик</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body"><label class="form-label">Наименование</label><input type="text" class="form-control" id="createCustomerName"></div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button><button type="button" class="btn btn-primary" data-lookup-create data-kind="customers" data-target-select="#id_customer" data-name-input="#createCustomerName" data-modal-close="#createCustomerModal">Создать</button></div>
+    </div></div>
+</div>
+{% else %}
+<div class="modal fade" id="createTransportCompanyModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Новая ТК</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body"><label class="form-label">Наименование</label><input type="text" class="form-control" id="createTransportCompanyName"></div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button><button type="button" class="btn btn-primary" data-lookup-create data-kind="transport-companies" data-target-select="#id_transport_company" data-name-input="#createTransportCompanyName" data-modal-close="#createTransportCompanyModal">Создать</button></div>
+    </div></div>
+</div>
+<div class="modal fade" id="createDriverModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Новый водитель</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <div class="mb-3"><label class="form-label">ФИО</label><input type="text" class="form-control" id="createDriverName"></div>
+            <div class="mb-3"><label class="form-label">Телефон</label><input type="text" class="form-control" id="createDriverPhone"></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button><button type="button" class="btn btn-primary" data-lookup-create data-kind="drivers" data-target-select="#id_driver" data-name-input="#createDriverName" data-phone-input="#createDriverPhone" data-tc-source="#id_transport_company" data-modal-close="#createDriverModal">Создать</button></div>
+    </div></div>
+</div>
+<div class="modal fade" id="createVehicleModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Новая машина</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <div class="mb-3"><label class="form-label">Гос. номер</label><input type="text" class="form-control" id="createVehicleName" data-plate-input="1" placeholder="М 362 АЕ 790"></div>
+            <div class="mb-3"><label class="form-label">Марка</label><select class="form-select" id="createVehicleBrand"><option value="">— загрузка… —</option></select></div>
+            <div class="mb-3"><label class="form-label">Тип авто</label><select class="form-select" id="createVehicleType"><option value="">— загрузка… —</option></select></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button><button type="button" class="btn btn-primary" data-lookup-create data-kind="vehicles" data-target-select="#id_vehicle" data-name-input="#createVehicleName" data-brand-input="#createVehicleBrand" data-vehicle-type-input="#createVehicleType" data-tc-source="#id_transport_company" data-modal-close="#createVehicleModal">Создать</button></div>
+    </div></div>
+</div>
+<div class="modal fade" id="createPaymentTypeModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Новый тип оплаты</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body"><label class="form-label">Наименование</label><input type="text" class="form-control" id="createPaymentTypeName"></div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button><button type="button" class="btn btn-primary" data-lookup-create data-kind="payment-types" data-target-select="#id_payment_type" data-name-input="#createPaymentTypeName" data-modal-close="#createPaymentTypeModal">Создать</button></div>
+    </div></div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/filters.js"></script>
+<script src="/static/js/plate_number.js"></script>
+{% endblock %}

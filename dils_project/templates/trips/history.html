@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% load dils_tags %}
+
+{% block title %}История рейса #{{ trip.pk }} · DiLS{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+        <h1 class="h4 mb-1">История рейса #{{ trip.pk }}</h1>
+        <div class="small text-muted">
+            Записей: {{ history|length }}
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'core:trip_detail' trip.pk %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> К рейсу
+        </a>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    {% if history %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 150px;">Дата</th>
+                    <th style="width: 180px;">Пользователь</th>
+                    <th style="width: 200px;">Поле</th>
+                    <th>Было</th>
+                    <th>Стало</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for h in history %}
+                <tr>
+                    <td class="small text-muted text-nowrap">
+                        {{ h.changed_at|date:"d.m.Y H:i" }}
+                    </td>
+                    <td class="small">
+                        {% if h.user %}
+                            {{ h.user.short_name }}<br>
+                            <span class="text-muted">{{ h.user.get_role_display }}</span>
+                        {% else %}
+                            <span class="text-muted">система</span>
+                        {% endif %}
+                    </td>
+                    <td class="small">{{ h.field_name }}</td>
+                    <td class="small">
+                        {% if h.old_value %}
+                            <span class="text-danger text-decoration-line-through">
+                                {{ h.old_value }}
+                            </span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="small">
+                        <span class="text-success">{{ h.new_value|default:"—" }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-center text-muted py-5">
+        <i class="bi bi-clock-history fs-3 d-block mb-2"></i>
+        История изменений пуста
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

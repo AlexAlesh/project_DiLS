@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% load dils_tags %}
+
+{% block title %}Заявки (Логист) · DiLS{% endblock %}
+
+{% block content %}
+
+{% include "includes/dashboard_cards.html" with dashboards_registry=dashboards_registry %}
+{% include "includes/filters.html" %}
+
+<div class="d-flex flex-column gap-3 mt-3">
+    {% for trip in page_obj %}
+
+    <div class="card shadow-sm trip-card"
+         data-href="{% url 'core:trip_detail' trip.pk %}"
+         style="border: 2px solid {{ trip.manager.color|default:'#0d6efd' }}; border-left: 6px solid {{ trip.manager.color|default:'#0d6efd' }}; border-radius: 6px; overflow: hidden;">
+
+        {# ==================== БЛОК 1: МЕНЕДЖЕР ==================== #}
+        <div class="card-body p-2 px-3" style="background-color: {{ trip.manager.bg_color|default:'#ffffff' }};">
+            <div class="d-flex align-items-start gap-2 w-100">
+
+                <div class="d-flex flex-column align-items-center flex-shrink-0 mt-1" style="width: 90px;">
+                    <span class="badge w-100" style="font-size: 11px; letter-spacing: 1px; background-color: {{ trip.manager.role_color|default:'#6c757d' }}; color: #fff;">
+                        МЕНЕДЖЕР
+                    </span>
+                    <span class="badge w-100 mt-1" style="font-size: 11px; background-color: {{ trip.manager.role_color|default:'#6c757d' }}; color: #fff;" title="Номер заявки">
+                        Заявка #{{ trip.pk }}
+                    </span>
+                </div>
+
+                <div class="flex-grow-1 d-flex flex-wrap gap-2" style="min-width: 0;">
+                    <div class="data-box">
+                        <span class="data-label">Дата загрузки</span>
+                        <span class="data-value fw-semibold">{{ trip.loading_date|format_date }}</span>
+                    </div>
+                    <div class="data-box">
+                        <span class="data-label">Дата разгрузки</span>
+                        <span class="data-value fw-semibold">{{ trip.unloading_date|format_date }}</span>
+                    </div>
+                    <div class="data-box">
+                        <span class="data-label">Менеджер</span>
+                        <span class="data-value">{{ trip.manager_display|default:"—" }}</span>
+                    </div>
+                    <div class="data-box">
+                        <span class="data-label">Заказчик</span>
+                        <span class="data-value fw-semibold">{{ trip.customer.name|default:"—" }}</span>
+                    </div>
+                    <div class="data-box flex-grow-1" style="min-width: 250px;">
+                        <span class="data-label">Информация по доставке</span>
+                        <span class="data-value text-break">{{ trip.delivery_info|default:"—" }}</span>
+                    </div>
+                </div>
+
+                {# Статусы и кнопки #}
+                <div class="d-flex align-items-start gap-3 flex-shrink-0 mt-1">
+                    <div class="d-flex flex-column align-items-end gap-1">
+                        {% status_badge trip.status %}
+                    </div>
+                    <div class="d-flex gap-1">
+                        <a href="{% url 'core:trip_history' trip.pk %}" class="btn btn-sm btn-outline-secondary py-1 px-2" title="История заявки">
+                            <i class="bi bi-clock-history"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <hr class="m-0" style="border-top: 3px solid rgba(0, 0, 0, 0.2); opacity: 1;">
+
+        {# ==================== БЛОК 2: РЕЙСЫ (ЛОГИСТ) ==================== #}
+        <div class="card-body p-2 px-3" style="background-color: {{ user.bg_color|default:'#f8f9fa' }};">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge" style="font-size: 11px; letter-spacing: 1px; background-color: {% if user.is_logist %}{{ user.role_color }}{% else %}#0d6efd{% endif %}; color: #fff;">
+                    РЕЙСЫ ({{ trip.legs.count }} из {{ trip.trips_count }})
+                </span>
+            </div>
+
+            <div class="d-flex flex-column gap-2">
+                {% for leg in trip.legs.all %}
+                <div class="d-flex align-items-center gap-2 p-2 rounded border bg-white hover-shadow transition flex-wrap"
+                     style="border-color: #dee2e6 !important; cursor: pointer;"
+                     onclick="event.stopPropagation(); window.location.href='{% url 'core:request_edit' leg.pk %}'">
+
+                    <span class="badge bg-secondary" style="font-size: 11px;">Рейс #{{ forloop.counter }}</span>
+
+                    <div class="data-box flex-grow-1" style="min-width: 140px;">
+                        <span class="data-label">Транспортная компания</span>
+                        <span class="data-value fw-semibold text-break">{{ leg.transport_company.name|default:"—" }}</span>
+                    </div>
+                    <div class="data-box flex-grow-1" style="min-width: 140px;">
+                        <span class="data-label">Водитель</span>
+                        <span class="data-value text-break">{{ leg.driver.full_name|default:"—" }}</span>
+                    </div>
+                    <div class="data-box" style="min-width: 110px;">
+                        <span class="data-label">Гос. номер</span>
+                        <span class="data-value">
+                            <span class="badge bg-light text-dark border font-monospace py-1" style="font-size: 12px;">{{ leg.plate_number|default:"—" }}</span>
+                        </span>
+                    </div>
+                    <div class="data-box" style="min-width: 130px;">
+                        <span class="data-label">Марка / Тип</span>
+                        <span class="data-value text-break">{{ leg.brand_name|default:"—" }} / {{ leg.vehicle_type_name|default:"—" }}</span>
+                    </div>
+                    <div class="data-box" style="min-width: 90px;">
+                        <span class="data-label">Цена</span>
+                        <span class="data-value fw-bold {% if not leg.price %}text-danger{% endif %}">
+                            {{ leg.price|format_money }}
+                        </span>
+                    </div>
+                    <div class="data-box" style="min-width: 120px;">
+                        <span class="data-label">Тип оплаты</span>
+                        <span class="data-value text-break">{{ leg.payment_type.name|default:"—" }}</span>
+                    </div>
+                    <div class="data-box" style="min-width: 80px;">
+                        <span class="data-label">№ ТТН</span>
+                        <span class="data-value">{{ leg.ttn_number|default:"—" }}</span>
+                    </div>
+
+                    {# ВЫВОД КОММЕНТАРИЯ ОТДЕЛЬНОЙ СТРОКОЙ #}
+                    {% if leg.logist_comment %}
+                    <div class="w-100 mt-1 pt-1 border-top">
+                        <span class="text-muted small fw-bold"><i class="bi bi-chat-left-text"></i> Комментарий:</span>
+                        <span class="small text-break">{{ leg.logist_comment }}</span>
+                    </div>
+                    {% endif %}
+
+                    {# Статус рейса #}
+                    <div class="ms-auto d-flex align-items-center gap-2 pe-2">
+                        {% if leg.is_filled %}
+                            <span class="badge text-bg-success">Выполнено</span>
+                        {% elif leg.is_started %}
+                            <span class="badge text-bg-warning">В работе</span>
+                        {% else %}
+                            <span class="badge text-bg-secondary">Ожидает</span>
+                        {% endif %}
+
+                        {% if leg.is_new_for_logist %}
+                            <span class="badge text-bg-danger">new</span>
+                        {% endif %}
+
+                        <i class="bi bi-pencil-square text-primary fs-5"></i>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="card border-0 shadow-sm">
+        <div class="card-body text-center text-muted py-4">
+            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+            Нет заявок по выбранным фильтрам
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% include "includes/pagination.html" %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/filters.js"></script>
+{% endblock %}

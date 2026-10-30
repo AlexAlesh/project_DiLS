@@ -1,0 +1,124 @@
+{% load static %}
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}DiLS — логистика{% endblock %}</title>
+
+    <link rel="icon" href="data:,">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+
+    <link rel="stylesheet" href="{% static 'css/main.css' %}">
+
+    {% if user.is_authenticated %}
+    <style>
+        :root { --dils-user-color: {{ user.color|default:"#0d6efd" }}; }
+    </style>
+
+    <script>
+        try {
+            if (localStorage.getItem('dils_sidebar_hidden') === 'true') {
+                document.documentElement.classList.add('dils-hide-sidebar');
+            }
+            if (localStorage.getItem('dils_filters_hidden') === 'true') {
+                document.documentElement.classList.add('dils-hide-filters');
+            }
+            if (localStorage.getItem('dils_dashboards_hidden') === 'true') {
+                document.documentElement.classList.add('dils-hide-dashboards');
+            }
+        } catch (e) {}
+    </script>
+    {% endif %}
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="bg-body-tertiary">
+
+<div class="d-flex min-vh-100">
+    {% if user.is_authenticated %}
+    <aside class="dils-sidebar d-flex flex-column flex-shrink-0 p-3 text-bg-dark" id="dils-sidebar">
+        <a href="{% url 'core:home' %}" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-white text-decoration-none">
+            <i class="bi bi-truck fs-4 me-2"></i>
+            <span class="fs-5 fw-semibold">DiLS</span>
+        </a>
+        <hr>
+        <ul class="nav nav-pills flex-column mb-auto">
+            {% if user.is_manager or user.is_admin_role %}
+            <li class="nav-item">
+                <a href="{% url 'core:trip_list' %}" class="nav-link text-white {% if request.resolver_match.url_name|slice:':5' == 'trip_' %}active{% endif %}">
+                    <i class="bi bi-signpost-split me-2"></i> Рейсы
+                </a>
+            </li>
+            {% endif %}
+
+            {% if user.is_logist or user.is_admin_role %}
+            <li class="nav-item">
+                <a href="{% url 'core:request_list' %}" class="nav-link text-white d-flex justify-content-between {% if 'request' in request.resolver_match.url_name %}active{% endif %}">
+                    <span><i class="bi bi-clipboard-check me-2"></i> Заявки</span>
+                    {% if new_requests_count %}<span class="badge bg-danger rounded-pill">{{ new_requests_count }}</span>{% endif %}
+                </a>
+            </li>
+            {# НОВЫЙ ПУНКТ МЕНЮ #}
+            <li class="nav-item">
+                <a href="{% url 'core:driver_trips_list' %}" class="nav-link text-white {% if 'driver_trips' in request.resolver_match.url_name %}active{% endif %}">
+                    <i class="bi bi-person-badge me-2"></i> Рейсы водителей
+                </a>
+            </li>
+            {% endif %}
+
+            {% if user.is_logist or user.is_admin_role %}
+            <li class="nav-item">
+                <a href="{% url 'core:report_index' %}" class="nav-link text-white {% if 'report' in request.resolver_match.url_name %}active{% endif %}">
+                    <i class="bi bi-bar-chart-line me-2"></i> Отчёты
+                </a>
+            </li>
+            {% endif %}
+
+            <li class="nav-item">
+                <a href="{% url 'core:profile_index' %}" class="nav-link text-white {% if 'profile' in request.resolver_match.url_name %}active{% endif %}">
+                    <i class="bi bi-person-circle me-2"></i> Профиль
+                </a>
+            </li>
+
+            {% if user.is_admin_role %}
+            <li class="nav-item">
+                <a href="{% url 'core:settings_index' %}" class="nav-link text-white {% if 'settings' in request.resolver_match.url_name %}active{% endif %}">
+                    <i class="bi bi-gear me-2"></i> Настройки
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </aside>
+    {% endif %}
+
+    <div class="d-flex flex-column flex-grow-1">
+        {% if user.is_authenticated %}{% include "includes/navbar.html" %}{% endif %}
+
+        <main class="flex-grow-1 p-3 p-lg-4">
+            {% if messages %}
+                <div class="mb-3">
+                    {% for msg in messages %}
+                    <div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show" role="alert">
+                        {{ msg }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            {% block content %}{% endblock %}
+        </main>
+        <footer class="text-center text-muted small py-3 border-top">DiLS · логистическая система · {% now "Y" %}</footer>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script src="{% static 'js/main.js' %}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

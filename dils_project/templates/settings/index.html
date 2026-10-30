@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Настройки · DiLS{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h4 mb-0">Настройки</h1>
+    <span class="badge text-bg-danger">только администратор</span>
+</div>
+
+<div class="row g-3">
+    {# ============================ ПОЛЬЗОВАТЕЛИ ============================ #}
+    <div class="col-md-6 col-lg-4">
+        <a href="{% url 'core:settings_users' %}" class="text-decoration-none">
+            <div class="data-box w-100 h-100 hover-shadow" style="padding: 20px;">
+                <div class="d-flex align-items-center mb-3">
+                    <i class="bi bi-people fs-2 text-primary me-3"></i>
+                    <h5 class="mb-0 text-dark fw-bold">Пользователи</h5>
+                </div>
+                <p class="text-muted small mb-0">
+                    Управление учётными записями: роли, контакты, активация.
+                </p>
+            </div>
+        </a>
+    </div>
+
+    {# ============================ СПРАВОЧНИКИ ============================ #}
+    <div class="col-md-6 col-lg-4">
+        <div class="data-box w-100 h-100" style="padding: 20px;">
+            <div class="d-flex align-items-center mb-3">
+                <i class="bi bi-book fs-2 text-success me-3"></i>
+                <h5 class="mb-0 text-dark fw-bold">Справочники</h5>
+            </div>
+            <p class="text-muted small mb-2">Заполняются автоматически из профилей.</p>
+            <ul class="list-unstyled small mb-0 text-muted">
+                <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i> Заказчики</li>
+                <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i> Транспортные компании</li>
+                <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i> Водители, машины</li>
+                <li><i class="bi bi-check2 text-success me-1"></i> Марки, типы авто, оплата</li>
+            </ul>
+        </div>
+    </div>
+
+    {# ============================ DJANGO ADMIN ============================ #}
+    <div class="col-md-6 col-lg-4">
+        <a href="/admin/" target="_blank" class="text-decoration-none">
+            <div class="data-box w-100 h-100 hover-shadow" style="padding: 20px;">
+                <div class="d-flex align-items-center mb-3">
+                    <i class="bi bi-shield-lock fs-2 text-danger me-3"></i>
+                    <h5 class="mb-0 text-dark fw-bold">Django Admin</h5>
+                </div>
+                <p class="text-muted small mb-0">
+                    Стандартная панель. Полный доступ к базе данных и настройкам.
+                </p>
+            </div>
+        </a>
+    </div>
+</div>
+
+{% endblock %}

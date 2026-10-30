@@ -1,0 +1,86 @@
+{% load static %}
+<nav class="navbar navbar-expand bg-white border-bottom sticky-top">
+    <div class="container-fluid">
+
+        <button class="btn btn-outline-secondary me-3" type="button" id="btn-toggle-sidebar" title="Скрыть/показать меню">
+            <i class="bi bi-list"></i>
+        </button>
+
+        <span class="navbar-brand mb-0 h6 text-truncate">
+            {% if request.resolver_match.url_name == 'trip_list' %}Рейсы
+            {% elif request.resolver_match.url_name == 'request_list' %}Заявки
+            {% elif request.resolver_match.url_name == 'driver_trips_list' %}Рейсы водителей
+            {% elif 'report' in request.resolver_match.url_name %}Отчёты
+            {% elif 'profile' in request.resolver_match.url_name %}Профиль
+            {% elif 'settings' in request.resolver_match.url_name %}Настройки
+            {% endif %}
+        </span>
+
+        <div class="ms-auto d-flex align-items-center gap-2">
+
+            {% if request.resolver_match.url_name == 'trip_list' or request.resolver_match.url_name == 'request_list' or 'report' in request.resolver_match.url_name %}
+            <div class="d-flex gap-1 me-2 border-end pe-3">
+                <button class="btn btn-sm btn-light border text-muted" id="btn-toggle-dashboards" title="Показать/скрыть сводку">
+                    <i class="bi bi-grid-3x3-gap"></i>
+                </button>
+                <button class="btn btn-sm btn-light border text-muted" id="btn-toggle-filters" title="Показать/скрыть фильтры">
+                    <i class="bi bi-funnel"></i>
+                </button>
+            </div>
+            {% endif %}
+
+            {% if request.resolver_match.url_name == 'trip_list' %}
+            <a href="{% url 'core:trip_create' %}" class="btn btn-sm btn-primary shadow-sm d-none d-sm-inline-block me-2">
+                <i class="bi bi-plus-lg"></i> Создать
+            </a>
+            {% endif %}
+
+            {% if user.is_logist or user.is_admin_role %}
+            <a href="{% url 'core:request_list' %}" class="btn btn-light position-relative me-2" title="Новые заявки">
+                <i class="bi bi-bell"></i>
+                {% if new_requests_count %}
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                    {{ new_requests_count }}
+                </span>
+                {% endif %}
+            </a>
+            {% endif %}
+
+            <div class="dropdown">
+                <button class="btn btn-light dropdown-toggle d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-person-circle"></i>
+                    <span class="d-none d-md-inline">{{ user.short_name|default:user.username }}</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow">
+                    <li>
+                        <span class="dropdown-item-text small text-muted fw-bold text-uppercase" style="font-size: 10px;">
+                            {{ user.get_role_display }}
+                        </span>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item" href="{% url 'core:profile_index' %}">
+                            <i class="bi bi-person me-2"></i> Профиль
+                        </a>
+                    </li>
+                    {% if user.is_admin_role %}
+                    <li>
+                        <a class="dropdown-item" href="{% url 'core:settings_index' %}">
+                            <i class="bi bi-gear me-2"></i> Настройки
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <form method="post" action="{% url 'logout' %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="dropdown-item text-danger">
+                                <i class="bi bi-box-arrow-right me-2"></i> Выйти
+                            </button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</nav>

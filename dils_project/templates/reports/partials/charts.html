@@ -1,0 +1,88 @@
+{% load dils_tags %}
+{% comment %}
+Графики отчётов.
+
+Данные подкладываются через data-атрибуты на контейнере,
+JS читает их в static/js/charts.js.
+
+Ожидает в контексте:
+- cash_sum       — сумма наличных
+- cashless_sum   — сумма безналичных
+- total_sum      — итоговая сумма
+- count          — количество рейсов
+{% endcomment %}
+
+<div class="row g-3 mb-3"
+     id="dils-charts-container"
+     data-cash="{{ cash_sum|default:0 }}"
+     data-cashless="{{ cashless_sum|default:0 }}"
+     data-total="{{ total_sum|default:0 }}"
+     data-count="{{ count|default:0 }}">
+
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <span>
+                    <i class="bi bi-pie-chart me-1"></i>
+                    Распределение по типу оплаты
+                </span>
+                <button type="button"
+                        class="btn btn-sm btn-link p-0 text-decoration-none"
+                        data-chart-toggle="dils-payment-chart">
+                    скрыть
+                </button>
+            </div>
+            <div class="card-body" id="dils-payment-chart"
+                 style="position: relative; min-height: 260px;">
+                <canvas id="chart-payment-type"></canvas>
+                <div class="text-center text-muted small d-none" data-chart-empty>
+                    Нет данных
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <span>
+                    <i class="bi bi-bar-chart me-1"></i>
+                    Сводка
+                </span>
+                <button type="button"
+                        class="btn btn-sm btn-link p-0 text-decoration-none"
+                        data-chart-toggle="dils-summary-chart">
+                    скрыть
+                </button>
+            </div>
+            <div class="card-body" id="dils-summary-chart">
+                <table class="table table-sm align-middle mb-0">
+                    <tbody>
+                        <tr>
+                            <td class="text-muted">Рейсов</td>
+                            <td class="text-end fw-semibold">{{ count }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Наличные</td>
+                            <td class="text-end fw-semibold text-success">
+                                {{ cash_sum|format_money }}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Безналичные</td>
+                            <td class="text-end fw-semibold text-primary">
+                                {{ cashless_sum|format_money }}
+                            </td>
+                        </tr>
+                        <tr class="border-top">
+                            <td class="text-muted">Итого</td>
+                            <td class="text-end fw-bold">
+                                {{ total_sum|format_money }}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

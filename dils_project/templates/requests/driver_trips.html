@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+{% load dils_tags %}
+
+{% block title %}Рейсы водителей · DiLS{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h4 mb-0">Рейсы водителей</h1>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#settingsModal">
+            <i class="bi bi-sliders"></i> Настроить поля
+        </button>
+    </div>
+</div>
+
+{# ================= ФИЛЬТРЫ ================= #}
+<div class="tile-panel mb-3" style="padding: 12px !important;">
+    <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <div class="data-box w-100">
+                <span class="data-label">Дата загрузки (от)</span>
+                <input type="date" name="loading_date_from" class="form-control border-0 bg-transparent px-0" value="{{ date_from }}">
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="data-box w-100">
+                <span class="data-label">Дата загрузки (до)</span>
+                <input type="date" name="loading_date_to" class="form-control border-0 bg-transparent px-0" value="{{ date_to }}">
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="data-box w-100">
+                <span class="data-label">Транспортные компании</span>
+                <select name="transport_company" class="form-select border-0 bg-transparent px-0" multiple size="1">
+                    {% for tc in all_tcs %}
+                        <option value="{{ tc.pk }}" {% if tc.pk|stringformat:"s" in selected_tcs %}selected{% endif %}>{{ tc.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-primary w-100"><i class="bi bi-funnel"></i> Применить</button>
+            <a href="{% url 'core:driver_trips_list' %}" class="btn btn-outline-danger" title="Сброс"><i class="bi bi-x-lg"></i></a>
+        </div>
+    </form>
+</div>
+
+{# ================= СПИСОК РЕЙСОВ ================= #}
+<div class="d-flex flex-column gap-2">
+    {% for leg in page_obj %}
+    <div class="card shadow-sm border-0 mb-2">
+        <div class="card-body p-3 position-relative">
+
+            {# Шапка карточки: Номер рейса + ФИО водителя, и кнопка редактирования #}
+            <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                <span class="badge bg-dark" style="font-size: 13px; padding: 6px 10px;">
+                    Рейс #{{ leg.pk }}: {{ leg.driver.full_name|default:"Водитель не назначен" }}
+                </span>
+                <a href="{% url 'core:request_edit' leg.pk %}" class="btn btn-sm btn-outline-primary py-1 px-3">
+                    <i class="bi bi-pencil"></i> Редактировать
+                </a>
+            </div>
+
+            {# Сетка данных #}
+            <div class="row g-2">
+
+                {# ================= РЯД 1: ДАТЫ И ЗАКАЗЧИКИ ================= #}
+                {% if 'loading_date' in visible_fields %}
+                <div class="col-md-2 col-sm-4">
+                    <div class="data-box w-100 h-100">
+                        <span class="data-label">Дата загрузки</span>
+                        <span class="data-value fw-semibold">{{ leg.trip.loading_date|format_date }}</span>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if 'unloading_date' in visible_fields %}
+                <div class="col-md-2 col-sm-4">
+                    <div class="data-box w-100 h-100">
+                        <span class="data-label">Дата разгрузки</span>
+                        <span class="data-value fw-semibold">{{ leg.trip.unloading_date|format_date }}</span>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if 'customer' in visible_fields %}
+                <div class="col-md-3 col-sm-6">
+                    <div class="data-box w-100 h-100">
+                        <span class="data-label">Заказчик</span>
+                        <div class="data-value fw-semibold">{{ leg.trip.customer.name|default:"—" }}</div>
+                        {% if leg.trip.customer.phone %}
+                            <div class="text-muted mt-1" style="font-size: 12px;">
+                                <i class="bi bi-telephone"></i> {{ leg.trip.customer.phone }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if 'manager' in visible_fields %}
+                <div class="col-md-3 col-sm-6">
+                    <div class="data-box w-100 h-100">
+                        <span class="data-label">Менеджер</span>
+                        <div class="data-value fw-semibold">{{ leg.trip.manager.get_full_name|default:leg.trip.manager.username|default:"—" }}</div>
+                        {% if leg.trip.manager.phone %}
+                            <div class="text-muted mt-1" style="font-size: 12px;">
+                                <i class="bi bi-telephone"></i> {{ leg.trip.manager.phone }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if 'transport_company' in visible_fields %}
+                <div class="col-md-2 col-sm-4">
+                    <div class="data-box w-100 h-100">
+                        <span class="data-label">ТК</span>
+                        <span class="data-value fw-semibold">{{ leg.transport_company.name|default:"—" }}</span>
+                    </div>
+                </div>
+                {% endif %}
+
+                {# ================= РЯД 2: ТРАНСПОРТ И ОПЛАТА ================= #}
+                {% if 'driver' in visible_fields %}
+                <div class="col-md-3 col-sm-6">
+                    <div class="data-box w-100 h-100">
+                        <span class="data-label">Водитель</span>
+                        <span class="data-value fw-semibold">{{ leg.driver.full_name|default:"—" }}</span>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if 'vehicle' in visible_fields %}
+                <div class="col-md-4 col-sm-6">
+                    <div class="data-box w-100 h-100">
+                        <span class="data-label">Машина</span>
+                        <div class="data-value font-monospace fw-bold" style="font-size: 15px;">
+                            {{ leg.plate_number|default:"—" }}
+                        </div>
+                        <div class="text-muted mt-1" style="font-size: 12px;">
+                            {{ leg.brand_name|default:"—" }} / {{ leg.vehicle_type_name|default:"—" }}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if 'price' in visible_fields %}
+                <div class="col-md-2 col-sm-4">
+                    <div class="data-box w-100 h-100">
+                        <span class="data-label">Цена</span>
+                        <span class="data-value fw-bold {% if not leg.price %}text-danger{% endif %}" style="font-size: 16px;">
+                            {{ leg.price|format_money }}
+                        </span>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if 'payment_type' in visible_fields %}
+                <div class="col-md-3 col-sm-8">
+                    <div class="data-box w-100 h-100">
+                        <span class="data-label">Тип оплаты</span>
+                        <span class="data-value">{{ leg.payment_type.name|default:"—" }}</span>
+                    </div>
+                </div>
+                {% endif %}
+
+                {# ================= РЯД 3: ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ ================= #}
+                {% if 'delivery_info' in visible_fields %}
+                <div class="col-md-6">
+                    <div class="data-box w-100 h-100">
+                        <span class="data-label">Информация по доставке</span>
+                        <span class="data-value text-break" style="font-size: 14px; white-space: pre-wrap;">{{ leg.trip.delivery_info|default:"—" }}</span>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if 'comment' in visible_fields %}
+                <div class="col-md-6">
+                    <div class="data-box w-100 h-100">
+                        <span class="data-label">Комментарий</span>
+                        <span class="data-value text-break" style="font-size: 14px; white-space: pre-wrap;">{{ leg.logist_comment|default:"—" }}</span>
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="card border-0 shadow-sm">
+        <div class="card-body text-center text-muted py-4">
+            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+            Нет рейсов по выбранным фильтрам
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% include "includes/pagination.html" %}
+
+{# ================= МОДАЛКА НАСТРОЙКИ (без изменений) ================= #}
+<div class="modal fade" id="settingsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-sliders"></i> Настройки отображения</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6 border-end">
+                        <h6 class="fw-bold mb-3">Отображаемые поля</h6>
+                        <div class="list-group">
+                            {% with fields=visible_fields %}
+                            <label class="list-group-item d-flex gap-2"><input type="checkbox" class="form-check-input" data-pref-page="driver_trips" data-pref-field="fields" data-pref-key="loading_date" {% if 'loading_date' in fields %}checked{% endif %}> Дата загрузки</label>
+                            <label class="list-group-item d-flex gap-2"><input type="checkbox" class="form-check-input" data-pref-page="driver_trips" data-pref-field="fields" data-pref-key="unloading_date" {% if 'unloading_date' in fields %}checked{% endif %}> Дата разгрузки</label>
+                            <label class="list-group-item d-flex gap-2"><input type="checkbox" class="form-check-input" data-pref-page="driver_trips" data-pref-field="fields" data-pref-key="customer" {% if 'customer' in fields %}checked{% endif %}> Заказчик + тел</label>
+                            <label class="list-group-item d-flex gap-2"><input type="checkbox" class="form-check-input" data-pref-page="driver_trips" data-pref-field="fields" data-pref-key="manager" {% if 'manager' in fields %}checked{% endif %}> Менеджер + тел</label>
+                            <label class="list-group-item d-flex gap-2"><input type="checkbox" class="form-check-input" data-pref-page="driver_trips" data-pref-field="fields" data-pref-key="delivery_info" {% if 'delivery_info' in fields %}checked{% endif %}> Информация по доставке</label>
+                            <label class="list-group-item d-flex gap-2"><input type="checkbox" class="form-check-input" data-pref-page="driver_trips" data-pref-field="fields" data-pref-key="transport_company" {% if 'transport_company' in fields %}checked{% endif %}> Транспортная компания</label>
+                            <label class="list-group-item d-flex gap-2"><input type="checkbox" class="form-check-input" data-pref-page="driver_trips" data-pref-field="fields" data-pref-key="driver" {% if 'driver' in fields %}checked{% endif %}> Водитель</label>
+                            <label class="list-group-item d-flex gap-2"><input type="checkbox" class="form-check-input" data-pref-page="driver_trips" data-pref-field="fields" data-pref-key="vehicle" {% if 'vehicle' in fields %}checked{% endif %}> Машина</label>
+                            <label class="list-group-item d-flex gap-2"><input type="checkbox" class="form-check-input" data-pref-page="driver_trips" data-pref-field="fields" data-pref-key="price" {% if 'price' in fields %}checked{% endif %}> Цена</label>
+                            <label class="list-group-item d-flex gap-2"><input type="checkbox" class="form-check-input" data-pref-page="driver_trips" data-pref-field="fields" data-pref-key="payment_type" {% if 'payment_type' in fields %}checked{% endif %}> Тип оплаты</label>
+                            <label class="list-group-item d-flex gap-2"><input type="checkbox" class="form-check-input" data-pref-page="driver_trips" data-pref-field="fields" data-pref-key="comment" {% if 'comment' in fields %}checked{% endif %}> Комментарий</label>
+                            {% endwith %}
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <h6 class="fw-bold mb-3">ТК по умолчанию</h6>
+                        <p class="text-muted small">Эти ТК будут выбраны автоматически при входе на страницу.</p>
+                        <div class="list-group" style="max-height: 250px; overflow-y: auto;">
+                            {% for tc in all_tcs %}
+                            <label class="list-group-item d-flex gap-2">
+                                <input type="checkbox" class="form-check-input"
+                                       data-pref-page="driver_trips"
+                                       data-pref-field="default_tcs"
+                                       data-pref-key="{{ tc.pk }}"
+                                       {% if tc.pk in default_tcs %}checked{% endif %}>
+                                {{ tc.name }}
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                <button type="button" class="btn btn-primary" data-pref-save-complex>Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.querySelector('[data-pref-save-complex]').addEventListener('click', function() {
+        const btn = this;
+        btn.disabled = true;
+
+        const visibleFields = [];
+        document.querySelectorAll('input[data-pref-field="fields"]:checked').forEach(el => {
+            visibleFields.push(el.dataset.prefKey);
+        });
+
+        const defaultTcs = [];
+        document.querySelectorAll('input[data-pref-field="default_tcs"]:checked').forEach(el => {
+            defaultTcs.push(parseInt(el.dataset.prefKey, 10));
+        });
+
+        const save = (page, field, values) => {
+            return fetch('/ajax/preferences/save/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || window.DiLS?.getCsrfToken() || '',
+                },
+                body: JSON.stringify({ page, field, values })
+            }).then(r => r.json());
+        };
+
+        Promise.all([
+            save('driver_trips', 'fields', visibleFields),
+            save('driver_trips', 'default_tcs', defaultTcs)
+        ]).then(() => {
+            window.location.reload();
+        }).catch(err => {
+            alert('Ошибка сохранения');
+            btn.disabled = false;
+        });
+    });
+</script>
+{% endblock %}

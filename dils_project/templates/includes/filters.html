@@ -1,0 +1,89 @@
+{% load dils_tags %}
+{% with page_key=kind %}
+<div class="tile-panel" id="dils-filters-wrapper" style="padding: 12px !important; margin-bottom: 12px !important;">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="small text-muted fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 11px;">Фильтры</span>
+        <button type="button" class="btn btn-sm btn-light border text-muted py-0 px-2" data-bs-toggle="modal" data-bs-target="#dilsFiltersSettingsModal" title="Настроить фильтры">
+            <i class="bi bi-sliders"></i>
+        </button>
+    </div>
+
+    <form method="get" class="row g-2 align-items-end" id="dils-filters-form">
+        {% for spec in filters_registry %}
+            {% if spec.key in visible_filters %}
+            <div class="col-6 col-md-4 col-lg-3 col-xl-2">
+
+                {# Возвращаем красивую плитку #}
+                <div class="data-box w-100" style="padding: 0 !important;">
+                    <div class="data-label">{{ spec.label }}</div>
+
+                    {% if spec.type == "date_range" %}
+                        <div class="d-flex gap-1 align-items-center w-100" style="padding: 4px 8px;">
+                            <input type="date" class="form-control form-control-sm" name="{{ spec.key }}_from" data-filter-key="{{ spec.key }}" data-filter-part="from" style="font-size: 13px; padding: 2px;">
+                            <span class="text-muted" style="font-size: 11px;">-</span>
+                            <input type="date" class="form-control form-control-sm" name="{{ spec.key }}_to" data-filter-key="{{ spec.key }}" data-filter-part="to" style="font-size: 13px; padding: 2px;">
+                        </div>
+
+                    {% elif spec.type == "select" %}
+                        <select class="form-select form-select-sm dils-multi-select w-100" name="{{ spec.key }}" data-filter-key="{{ spec.key }}" multiple
+                                {% if spec.key == 'manager' and user.is_manager %}data-default-value="{{ user.pk }}"{% endif %}
+                                style="border: none; padding: 4px 8px;">
+                            {% with opts=filter_choices|get_item:spec.key %}
+                                {% for value, label in opts %}
+                                    {% if value %}<option value="{{ value }}">{{ label }}</option>{% endif %}
+                                {% endfor %}
+                            {% endwith %}
+                        </select>
+
+                    {% elif spec.type == "text" %}
+                        <input type="text" class="form-control form-control-sm w-100" name="{{ spec.key }}" data-filter-key="{{ spec.key }}" placeholder="Поиск…" style="border: none; padding: 4px 8px;">
+
+                    {% elif spec.type == "number_range" %}
+                        <div class="d-flex gap-1 align-items-center w-100" style="padding: 4px 8px;">
+                            <input type="number" class="form-control form-control-sm" name="{{ spec.key }}_min" data-filter-key="{{ spec.key }}" data-filter-part="min" step="0.01" placeholder="от" style="font-size: 13px; padding: 2px;">
+                            <span class="text-muted" style="font-size: 11px;">-</span>
+                            <input type="number" class="form-control form-control-sm" name="{{ spec.key }}_max" data-filter-key="{{ spec.key }}" data-filter-part="max" step="0.01" placeholder="до" style="font-size: 13px; padding: 2px;">
+                        </div>
+                    {% endif %}
+                </div>
+
+            </div>
+            {% endif %}
+        {% endfor %}
+
+        <div class="col-auto ms-auto d-flex gap-2 mt-2 mt-md-0">
+            <button type="submit" class="btn btn-primary btn-sm shadow-sm px-3">
+                <i class="bi bi-funnel-fill"></i> Применить
+            </button>
+            <a href="{{ request.path }}" class="btn btn-danger btn-sm shadow-sm px-2" title="Сбросить">
+                <i class="bi bi-x-lg"></i>
+            </a>
+        </div>
+    </form>
+</div>
+
+<div class="modal fade" id="dilsFiltersSettingsModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title fs-6"><i class="bi bi-sliders me-1"></i> Видимые фильтры</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="list-group">
+                    {% for spec in filters_registry %}
+                    <label class="list-group-item d-flex align-items-center gap-2 py-2">
+                        <input class="form-check-input m-0" type="checkbox" data-pref-field="filters" data-pref-key="{{ spec.key }}" {% if spec.key in visible_filters %}checked{% endif %}>
+                        <span>{{ spec.label }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="modal-footer py-1">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-sm btn-primary" data-pref-save data-pref-page="{{ page_key }}" data-pref-field="filters">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endwith %}

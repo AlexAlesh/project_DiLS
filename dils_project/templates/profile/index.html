@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+{% load dils_tags %}
+
+{% block title %}Профиль · DiLS{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h4 mb-0">Профиль</h1>
+    <span class="badge text-bg-light border">{{ user_obj.get_role_display }}</span>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white"><i class="bi bi-person-circle me-1"></i> Личные данные и оформление</div>
+            <div class="card-body">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    <div class="mb-2"><label class="form-label text-muted small">{{ form.last_name.label }}</label>{{ form.last_name }}</div>
+                    <div class="mb-2"><label class="form-label text-muted small">{{ form.first_name.label }}</label>{{ form.first_name }}</div>
+                    <div class="mb-2"><label class="form-label text-muted small">{{ form.phone.label }}</label>{{ form.phone }}</div>
+                    <div class="mb-2"><label class="form-label text-muted small">{{ form.email.label }}</label>{{ form.email }}</div>
+
+                    <div class="row g-2 mb-4 mt-2">
+                        <div class="col-4">
+                            <label class="form-label text-muted small d-block">Рамка</label>
+                            {{ form.color }}
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label text-muted small d-block">Заливка</label>
+                            {{ form.bg_color }}
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label text-muted small d-block">Должность</label>
+                            {{ form.role_color }}
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-check-lg"></i> Сохранить профиль</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# ============================ СПРАВОЧНИК ============================ #}
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-book me-1"></i> {{ directory_title }}</span>
+                <span class="badge text-bg-light border">{{ directory|length }}</span>
+            </div>
+
+            <div class="card-body p-0" style="max-height: 380px; overflow-y: auto;">
+                {% if directory %}
+                <ul class="list-group list-group-flush">
+                    {% for item in directory %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-semibold">{{ item.name }}</div>
+                            {% if item.contact_person or item.phone %}
+                                <div class="text-muted small mt-1" style="font-size: 11px;">
+                                    {% if item.contact_person %}<i class="bi bi-person"></i> {{ item.contact_person }}{% endif %}
+                                    {% if item.phone %}<i class="bi bi-telephone ms-2"></i> {{ item.phone }}{% endif %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2"
+                                    onclick="openEditLookup('{{ directory_kind }}', {{ item.pk }}, '{{ item.name|escapejs }}')" title="Настроить">
+                                <i class="bi bi-gear"></i> Настроить
+                            </button>
+                            <form method="post" onsubmit="return confirm('Удалить «{{ item.name }}»?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="delete_lookup" value="1">
+                                <input type="hidden" name="lookup_pk" value="{{ item.pk }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Удалить"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <div class="text-center text-muted py-4">Справочник пока пуст</div>
+                {% endif %}
+            </div>
+
+            <div class="card-footer bg-white py-3">
+                <form method="post" class="d-flex gap-2">
+                    {% csrf_token %}
+                    <input type="hidden" name="add_lookup" value="1">
+                    <input type="text" name="lookup_name" class="form-control form-control-sm" placeholder="Добавить новую запись..." required>
+                    <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-plus-lg"></i> Добавить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ============================ МОДАЛКА РЕДАКТИРОВАНИЯ ============================ #}
+<div class="modal fade" id="editLookupModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Редактирование</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" id="closeModalBtn"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Наименование</label>
+                    <input type="text" class="form-control" id="editLookupName" required>
+                </div>
+
+                {# ОБЩИЙ БЛОК КОНТАКТОВ (Для ТК и Заказчиков) #}
+                <div id="contactFieldsBlock" class="d-none">
+                    <div class="row g-2 mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label text-muted small">Контактное лицо</label>
+                            <input type="text" class="form-control" id="editContactPerson">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label text-muted small">Телефон</label>
+                            <input type="text" class="form-control" id="editContactPhone">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label text-muted small">Почта</label>
+                            <input type="email" class="form-control" id="editContactEmail">
+                        </div>
+                    </div>
+                </div>
+
+                {# БЛОК ДЛЯ ЗАКАЗЧИКОВ (Адреса) #}
+                <div id="customerFieldsBlock" class="d-none">
+                    <hr>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-geo-alt text-danger"></i> Адреса доставки</h6>
+                        <button type="button" class="btn btn-sm btn-outline-success" onclick="showAddressForm()"><i class="bi bi-plus"></i> Добавить</button>
+                    </div>
+
+                    <div id="addressForm" class="card bg-light p-2 mb-2 d-none">
+                        <input type="hidden" id="editAddressId">
+                        <div class="row g-2">
+                            <div class="col-10"><input type="text" class="form-control form-control-sm" id="addressText" placeholder="Введите адрес или информацию..."></div>
+                            <div class="col-2"><button type="button" class="btn btn-sm btn-success w-100" onclick="saveAddress()">OK</button></div>
+                        </div>
+                    </div>
+
+                    <ul class="list-group mb-2" id="customerAddressesList"></ul>
+                </div>
+
+                {# БЛОК ДЛЯ ЛОГИСТА (Водители и машины) #}
+                <div id="lookupExtraFields" class="d-none">
+                    <hr>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-person"></i> Водители</h6>
+                        <button type="button" class="btn btn-sm btn-outline-success" onclick="showDriverForm()"><i class="bi bi-plus"></i> Добавить</button>
+                    </div>
+
+                    <div id="driverForm" class="card bg-light p-2 mb-2 d-none">
+                        <input type="hidden" id="editDriverId">
+                        <div class="row g-2">
+                            <div class="col-6"><input type="text" class="form-control form-control-sm" id="newDriverName" placeholder="ФИО"></div>
+                            <div class="col-4"><input type="text" class="form-control form-control-sm" id="newDriverPhone" placeholder="Телефон"></div>
+                            <div class="col-2"><button type="button" class="btn btn-sm btn-success w-100" onclick="saveDriver()">OK</button></div>
+                        </div>
+                    </div>
+
+                    <ul class="list-group mb-3" id="lookupDriversList"></ul>
+
+                    <hr>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="fw-bold mb-0"><i class="bi bi-truck"></i> Машины</h6>
+                        <button type="button" class="btn btn-sm btn-outline-success" onclick="showVehicleForm()"><i class="bi bi-plus"></i> Добавить</button>
+                    </div>
+
+                    <div id="vehicleForm" class="card bg-light p-2 mb-2 d-none">
+                        <input type="hidden" id="editVehicleId">
+                        <div class="row g-2">
+                            <div class="col-12"><input type="text" class="form-control form-control-sm" id="newVehiclePlate" placeholder="Гос. номер (М 362 АЕ 790)" data-plate-input="1"></div>
+                            <div class="col-5"><select class="form-select form-select-sm" id="newVehicleBrand"></select></div>
+                            <div class="col-5"><select class="form-select form-select-sm" id="newVehicleType"></select></div>
+                            <div class="col-2"><button type="button" class="btn btn-sm btn-success w-100" onclick="saveVehicle()">OK</button></div>
+                        </div>
+                    </div>
+
+                    <ul class="list-group mb-2" id="lookupVehiclesList"></ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                <button type="button" class="btn btn-primary" onclick="saveLookupEdit()">Сохранить изменения</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/plate_number.js"></script>
+
+<script>
+let currentLookupId = null;
+
+function getCsrf() {
+    if (window.DiLS && window.DiLS.getCsrfToken) return window.DiLS.getCsrfToken();
+    const cookie = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
+    if (cookie) return cookie.split('=')[1];
+    const input = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    return input ? input.value : '';
+}
+
+function openEditLookup(kind, pk, name) {
+    currentLookupId = pk;
+    document.getElementById('editLookupName').value = name;
+
+    // Скрываем все доп. блоки по умолчанию
+    document.getElementById('driverForm').classList.add('d-none');
+    document.getElementById('vehicleForm').classList.add('d-none');
+    document.getElementById('addressForm').classList.add('d-none');
+    document.getElementById('contactFieldsBlock').classList.add('d-none');
+    document.getElementById('customerFieldsBlock').classList.add('d-none');
+    document.getElementById('lookupExtraFields').classList.add('d-none');
+
+    if (kind === 'transport-companies') {
+        document.getElementById('contactFieldsBlock').classList.remove('d-none');
+        document.getElementById('lookupExtraFields').classList.remove('d-none');
+        loadLookupDetails(kind, pk);
+    } else if (kind === 'customers') {
+        document.getElementById('contactFieldsBlock').classList.remove('d-none');
+        document.getElementById('customerFieldsBlock').classList.remove('d-none');
+        loadLookupDetails(kind, pk);
+    }
+
+    new bootstrap.Modal(document.getElementById('editLookupModal')).show();
+}
+
+function loadLookupDetails(kind, pk) {
+    fetch(`/ajax/lookup/${kind}/${pk}/`)
+        .then(async r => {
+            if (!r.ok) throw new Error(`Ошибка сервера: ${r.status}`);
+            return r.json();
+        })
+        .then(data => {
+            document.getElementById('editContactPerson').value = data.contact_person || '';
+            document.getElementById('editContactPhone').value = data.phone || '';
+            document.getElementById('editContactEmail').value = data.email || '';
+
+            if (kind === 'transport-companies') {
+                renderDrivers(data.drivers || []);
+                renderVehicles(data.vehicles || []);
+            } else if (kind === 'customers') {
+                renderCustomerAddresses(data.addresses || []);
+            }
+        })
+        .catch(err => alert(err.message));
+}
+
+// --- АДРЕСА ---
+function renderCustomerAddresses(addresses) {
+    const list = document.getElementById('customerAddressesList');
+    list.innerHTML = '';
+    if (!addresses || !addresses.length) {
+        list.innerHTML = '<li class="list-group-item text-muted py-1">Нет сохраненных адресов</li>';
+        return;
+    }
+    addresses.forEach(a => {
+        list.innerHTML += `<li class="list-group-item d-flex justify-content-between align-items-center py-1">
+            <span class="text-break" style="font-size: 13px;">${a.info}</span>
+            <div class="d-flex gap-1">
+                <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" onclick="editAddress(${a.id}, '${a.info.replace(/'/g, "\\'")}')"><i class="bi bi-pencil"></i></button>
+                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="deleteCustomerAddress(${a.id})" title="Удалить"><i class="bi bi-x"></i></button>
+            </div>
+        </li>`;
+    });
+}
+
+function showAddressForm() {
+    document.getElementById('addressForm').classList.remove('d-none');
+    document.getElementById('editAddressId').value = '';
+    document.getElementById('addressText').value = '';
+    document.getElementById('addressText').focus();
+}
+
+function editAddress(id, info) {
+    document.getElementById('addressForm').classList.remove('d-none');
+    document.getElementById('editAddressId').value = id;
+    document.getElementById('addressText').value = info;
+    document.getElementById('addressText').focus();
+}
+
+function saveAddress() {
+    const id = document.getElementById('editAddressId').value;
+    const info = document.getElementById('addressText').value.trim();
+    if (!info) return;
+
+    const formData = new FormData();
+    formData.append('info', info);
+
+    let url = `/ajax/customer/${currentLookupId}/address/add/`;
+    if (id) {
+        url = `/ajax/customer-address/${id}/edit/`;
+    }
+
+    fetch(url, { method: 'POST', headers: {'X-CSRFToken': getCsrf()}, body: formData })
+    .then(async r => { if (!r.ok) throw new Error('Ошибка'); return r.json(); })
+    .then(() => {
+        document.getElementById('addressForm').classList.add('d-none');
+        loadLookupDetails('customers', currentLookupId);
+    })
+    .catch(err => alert(err.message));
+}
+
+function deleteCustomerAddress(pk) {
+    if (!confirm('Удалить этот адрес из истории?')) return;
+    fetch(`/ajax/customer-address/${pk}/delete/`, {
+        method: 'POST', headers: {'X-CSRFToken': getCsrf()}
+    }).then(r => r.json()).then(() => loadLookupDetails('customers', currentLookupId));
+}
+
+// --- ВОДИТЕЛИ ---
+function renderDrivers(drivers) {
+    const list = document.getElementById('lookupDriversList');
+    list.innerHTML = '';
+    if (!drivers || !drivers.length) {
+        list.innerHTML = '<li class="list-group-item text-muted py-1">Нет водителей</li>';
+        return;
+    }
+    drivers.forEach(d => {
+        list.innerHTML += `<li class="list-group-item d-flex justify-content-between align-items-center py-1">
+            <span>${d.name} <small class="text-muted">${d.phone || ''}</small></span>
+            <div class="d-flex gap-1">
+                <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" onclick="editDriver(${d.id}, '${d.name.replace(/'/g, "\\'")}', '${d.phone || ''}')"><i class="bi bi-pencil"></i></button>
+                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="deleteDriver(${d.id})"><i class="bi bi-x"></i></button>
+            </div>
+        </li>`;
+    });
+}
+
+function showDriverForm() {
+    document.getElementById('driverForm').classList.remove('d-none');
+    document.getElementById('editDriverId').value = '';
+    document.getElementById('newDriverName').value = '';
+    document.getElementById('newDriverPhone').value = '';
+    document.getElementById('newDriverName').focus();
+}
+
+function editDriver(id, name, phone) {
+    document.getElementById('driverForm').classList.remove('d-none');
+    document.getElementById('editDriverId').value = id;
+    document.getElementById('newDriverName').value = name;
+    document.getElementById('newDriverPhone').value = phone;
+    document.getElementById('newDriverName').focus();
+}
+
+function saveDriver() {
+    const id = document.getElementById('editDriverId').value;
+    const name = document.getElementById('newDriverName').value.trim();
+    const phone = document.getElementById('newDriverPhone').value.trim();
+    if (!name) { alert('Введите ФИО'); return; }
+
+    const formData = new FormData();
+    formData.append('name', name); formData.append('phone', phone);
+    let url = id ? `/ajax/driver/${id}/edit/` : '/ajax/create/drivers/';
+    if (!id) formData.append('transport_company', currentLookupId);
+
+    fetch(url, { method: 'POST', headers: {'X-CSRFToken': getCsrf()}, body: formData })
+    .then(async r => { if (!r.ok) throw new Error('Ошибка'); return r.json(); })
+    .then(() => { document.getElementById('driverForm').classList.add('d-none'); loadLookupDetails('transport-companies', currentLookupId); })
+    .catch(err => alert(err.message));
+}
+
+function deleteDriver(pk) {
+    if (!confirm('Удалить водителя?')) return;
+    fetch(`/ajax/driver/${pk}/delete/`, { method: 'POST', headers: {'X-CSRFToken': getCsrf()} })
+    .then(() => loadLookupDetails('transport-companies', currentLookupId));
+}
+
+// --- МАШИНЫ ---
+function renderVehicles(vehicles) {
+    const list = document.getElementById('lookupVehiclesList');
+    list.innerHTML = '';
+    if (!vehicles || !vehicles.length) {
+        list.innerHTML = '<li class="list-group-item text-muted py-1">Нет машин</li>';
+        return;
+    }
+    vehicles.forEach(v => {
+        list.innerHTML += `<li class="list-group-item d-flex justify-content-between align-items-center py-1">
+            <span>${v.name} <small class="text-muted">(${v.brand} / ${v.type})</small></span>
+            <div class="d-flex gap-1">
+                <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" onclick="editVehicle(${v.id}, '${v.name.replace(/'/g, "\\'")}', ${v.brand_id}, ${v.type_id})"><i class="bi bi-pencil"></i></button>
+                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="deleteVehicle(${v.id})"><i class="bi bi-x"></i></button>
+            </div>
+        </li>`;
+    });
+}
+
+function loadDropdowns(callback) {
+    const brandSel = document.getElementById('newVehicleBrand');
+    if (brandSel.options.length > 0) { if(callback) callback(); return; }
+    Promise.all([fetch('/ajax/search/brands/').then(r=>r.json()), fetch('/ajax/search/vehicle-types/').then(r=>r.json())])
+    .then(([brands, types]) => {
+        brandSel.innerHTML = '<option value="">Марка...</option>';
+        (brands.results || []).forEach(i => brandSel.add(new Option(i.text, i.id)));
+        const typeSel = document.getElementById('newVehicleType');
+        typeSel.innerHTML = '<option value="">Тип...</option>';
+        (types.results || []).forEach(i => typeSel.add(new Option(i.text, i.id)));
+        if(callback) callback();
+    });
+}
+
+function showVehicleForm() {
+    loadDropdowns(() => {
+        document.getElementById('vehicleForm').classList.remove('d-none');
+        document.getElementById('editVehicleId').value = '';
+        document.getElementById('newVehiclePlate').value = '';
+        document.getElementById('newVehiclePlate').focus();
+    });
+}
+
+function editVehicle(id, name, brandId, typeId) {
+    loadDropdowns(() => {
+        document.getElementById('vehicleForm').classList.remove('d-none');
+        document.getElementById('editVehicleId').value = id;
+        document.getElementById('newVehiclePlate').value = name;
+        document.getElementById('newVehicleBrand').value = brandId;
+        document.getElementById('newVehicleType').value = typeId;
+        document.getElementById('newVehiclePlate').focus();
+    });
+}
+
+function saveVehicle() {
+    const id = document.getElementById('editVehicleId').value;
+    const name = document.getElementById('newVehiclePlate').value.trim();
+    const brand = document.getElementById('newVehicleBrand').value;
+    const vtype = document.getElementById('newVehicleType').value;
+    if (!name || !brand || !vtype) { alert('Заполните все поля'); return; }
+
+    const formData = new FormData();
+    formData.append('name', name); formData.append('brand', brand); formData.append('vehicle_type', vtype);
+    let url = id ? `/ajax/vehicle/${id}/edit/` : '/ajax/create/vehicles/';
+    if (!id) formData.append('transport_company', currentLookupId);
+
+    fetch(url, { method: 'POST', headers: {'X-CSRFToken': getCsrf()}, body: formData })
+    .then(async r => { if (!r.ok) throw new Error('Ошибка'); return r.json(); })
+    .then(() => { document.getElementById('vehicleForm').classList.add('d-none'); loadLookupDetails('transport-companies', currentLookupId); })
+    .catch(err => alert(err.message));
+}
+
+function deleteVehicle(pk) {
+    if (!confirm('Удалить машину?')) return;
+    fetch(`/ajax/vehicle/${pk}/delete/`, { method: 'POST', headers: {'X-CSRFToken': getCsrf()} })
+    .then(() => loadLookupDetails('transport-companies', currentLookupId));
+}
+
+function saveLookupEdit() {
+    const name = document.getElementById('editLookupName').value.trim();
+    if (!name) { alert('Название не может быть пустым'); return; }
+
+    const kind = "{{ directory_kind }}";
+    const formData = new FormData();
+    formData.append('name', name);
+
+    // Если показан блок контактов (ТК или Заказчик)
+    if (!document.getElementById('contactFieldsBlock').classList.contains('d-none')) {
+        formData.append('contact_person', document.getElementById('editContactPerson').value.trim());
+        formData.append('phone', document.getElementById('editContactPhone').value.trim());
+        formData.append('email', document.getElementById('editContactEmail').value.trim());
+    }
+
+    fetch(`/ajax/lookup/${kind}/${currentLookupId}/edit/`, {
+        method: 'POST', headers: {'X-CSRFToken': getCsrf()}, body: formData
+    }).then(() => window.location.reload());
+}
+</script>
+{% endblock %}

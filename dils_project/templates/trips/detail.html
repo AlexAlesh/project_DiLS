@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% load dils_tags %}
+
+{% block title %}Заявка #{{ trip.pk }} · DiLS{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+        <h1 class="h3 mb-1 fw-bold">Заявка #{{ trip.pk }}</h1>
+        <div class="text-muted" style="font-size: 14px;">
+            Создана {{ trip.created_at|date:"d.m.Y H:i" }}
+            {% if trip.updated_at != trip.created_at %}
+                · обновлена {{ trip.updated_at|date:"d.m.Y H:i" }}
+            {% endif %}
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        {% if user.is_logist %}
+            <a href="{% url 'core:request_list' %}" class="btn btn-outline-secondary shadow-sm">
+                <i class="bi bi-arrow-left"></i> К списку
+            </a>
+        {% else %}
+            <a href="{% url 'core:trip_edit' trip.pk %}" class="btn btn-primary shadow-sm">
+                <i class="bi bi-pencil"></i> Редактировать
+            </a>
+            <a href="{% url 'core:trip_list' %}" class="btn btn-outline-secondary shadow-sm">
+                <i class="bi bi-arrow-left"></i> К списку
+            </a>
+        {% endif %}
+        <a href="{% url 'core:trip_history' trip.pk %}" class="btn btn-outline-secondary shadow-sm">
+            <i class="bi bi-clock-history"></i> История
+        </a>
+    </div>
+</div>
+
+<div class="row g-3">
+    {# ============================ МЕНЕДЖЕР ============================ #}
+    <div class="col-lg-6">
+        <div class="tile-panel h-100 mb-0"
+             style="border-left: 6px solid {{ trip.manager.color|default:'#0d6efd' }}; background-color: {{ trip.manager.bg_color|default:'#ffffff' }};">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="fw-bold fs-5 d-flex align-items-center gap-2">
+                    <span class="badge" style="background-color: {{ trip.manager.role_color|default:'#6c757d' }}; color: #fff;">МЕНЕДЖЕР</span>
+                    Данные менеджера
+                </span>
+                <div class="fs-6">{% status_badge trip.status %}</div>
+            </div>
+
+            <div class="row g-2 mb-3">
+                <div class="col-sm-6">
+                    <div class="data-box w-100">
+                        <span class="data-label">Дата загрузки</span>
+                        <span class="data-value fs-5 fw-semibold">{{ trip.loading_date|format_date }}</span>
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="data-box w-100">
+                        <span class="data-label">Дата разгрузки</span>
+                        <span class="data-value fs-5 fw-semibold">{{ trip.unloading_date|format_date }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-2 mb-3">
+                <div class="col-sm-12">
+                    <div class="data-box w-100">
+                        <span class="data-label">Менеджер</span>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="data-value fs-5 fw-semibold">{{ trip.manager.get_full_name|default:trip.manager.username|default:"—" }}</span>
+                            <span class="text-muted" style="font-size: 13px;">
+                                {{ trip.manager.phone }}{% if trip.manager.phone and trip.manager.email %} · {% endif %}{{ trip.manager.email }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-2 mb-3">
+                <div class="col-sm-12">
+                    <div class="data-box w-100">
+                        <span class="data-label">Заказчик</span>
+                        <span class="data-value fs-5 fw-semibold">{{ trip.customer.name|default:"—" }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="data-box w-100">
+                <span class="data-label mb-2">Информация по доставке</span>
+                {% if trip.delivery_info %}
+                    <div class="data-value text-break" style="white-space: pre-wrap; font-size: 15px;">{{ trip.delivery_info }}</div>
+                {% else %}
+                    <span class="data-value text-muted">—</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# ============================ ЛОГИСТ (СПИСОК РЕЙСОВ) ============================ #}
+    <div class="col-lg-6">
+        <div class="tile-panel h-100 mb-0" style="background-color: {% if logist_user %}{{ logist_user.bg_color }}{% else %}#ffffff{% endif %};">
+            <div class="mb-3 d-flex justify-content-between align-items-center">
+                <span class="fw-bold fs-5 d-flex align-items-center gap-2">
+                    <span class="badge" style="background-color: {% if logist_user %}{{ logist_user.role_color }}{% else %}#0d6efd{% endif %}; color: #fff;">ЛОГИСТ</span>
+                    Рейсы в заявке
+                </span>
+                <span class="badge bg-secondary fs-6">Всего: {{ trip.trips_count }}</span>
+            </div>
+
+            <div class="d-flex flex-column gap-2">
+                {% for leg in trip.legs.all %}
+                <div class="p-2 border rounded bg-white mb-2">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="badge bg-primary">Рейс #{{ forloop.counter }}</span>
+                        {% if leg.is_filled %}
+                            <span class="badge text-bg-success">Выполнено</span>
+                        {% elif leg.is_started %}
+                            <span class="badge text-bg-warning">В работе</span>
+                        {% else %}
+                            <span class="badge text-bg-secondary">Ожидает</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2">
+                        <div class="data-box">
+                            <span class="data-label">ТК</span>
+                            <span class="data-value">{{ leg.transport_company.name|default:"—" }}</span>
+                        </div>
+                        <div class="data-box">
+                            <span class="data-label">Водитель</span>
+                            <span class="data-value">{{ leg.driver.full_name|default:"—" }}</span>
+                        </div>
+                        <div class="data-box">
+                            <span class="data-label">Гос. номер</span>
+                            <span class="data-value font-monospace">{{ leg.plate_number|default:"—" }}</span>
+                        </div>
+                        <div class="data-box">
+                            <span class="data-label">Марка / Тип</span>
+                            <span class="data-value">{{ leg.brand_name|default:"—" }} / {{ leg.vehicle_type_name|default:"—" }}</span>
+                        </div>
+                        <div class="data-box">
+                            <span class="data-label">Цена</span>
+                            <span class="data-value fw-bold">{{ leg.price|format_money }}</span>
+                        </div>
+
+                        <div class="data-box">
+                            <span class="data-label">Тип оплаты</span>
+                            <span class="data-value">{{ leg.payment_type.name|default:"—" }}</span>
+                        </div>
+                        <div class="data-box">
+                            <span class="data-label">№ ТТН</span>
+                            <span class="data-value">{{ leg.ttn_number|default:"—" }}</span>
+                        </div>
+                    </div>
+
+                    {# ВЫВОД КОММЕНТАРИЯ В ДЕТАЛЬНОЙ КАРТОЧКЕ #}
+                    {% if leg.logist_comment %}
+                    <div class="mt-2 pt-2 border-top">
+                        <span class="text-muted small fw-bold"><i class="bi bi-chat-left-text"></i> Комментарий:</span>
+                        <div class="small text-break text-dark mt-1" style="background: #f8f9fa; padding: 6px; border-radius: 4px;">{{ leg.logist_comment }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ============================ ИСТОРИЯ (кратко) ============================ #}
+{% with recent=trip.history.all|slice:":5" %}
+{% if recent %}
+<div class="tile-panel mt-3 mb-0">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <span class="fw-bold fs-5"><i class="bi bi-clock-history me-2"></i> Последние изменения заявки</span>
+        <a href="{% url 'core:trip_history' trip.pk %}" class="btn btn-sm btn-link text-decoration-none fs-6">Вся история →</a>
+    </div>
+    <ul class="list-group list-group-flush">
+        {% for h in recent %}
+        <li class="list-group-item px-0 py-2 bg-transparent" style="font-size: 15px; border-bottom: 1px dashed #dee2e6;">
+            <span class="text-muted me-2">{{ h.changed_at|date:"d.m.Y H:i" }}</span>
+            {% if h.user %}· <strong>{{ h.user.short_name }}</strong>{% endif %}
+            · {{ h.field_name }}:
+            {% if h.old_value %}
+                <span class="text-danger text-decoration-line-through">{{ h.old_value }}</span> →
+            {% endif %}
+            <span class="text-success fw-semibold">{{ h.new_value }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+{% endwith %}
+
+{% endblock %}
