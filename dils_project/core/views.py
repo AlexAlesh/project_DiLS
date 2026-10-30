@@ -58,6 +58,63 @@ def admin_required(view):
     return wrapper
 
 
+# Разграничение прав на справочники:
+#   - заказчики и их адреса — ведёт менеджер (и админ);
+#   - ТК, водители, машины, марки, типы ТС, типы оплаты — ведёт логист (и админ).
+_LOOKUP_OWNER_ROLES = {
+    "customers": (User.ROLE_MANAGER,),
+    "customer-addresses": (User.ROLE_MANAGER,),
+    "transport-companies": (User.ROLE_LOGIST,),
+    "drivers": (User.ROLE_LOGIST,),
+    "vehicles": (User.ROLE_LOGIST,),
+    "brands": (User.ROLE_LOGIST,),
+    "vehicle-types": (User.ROLE_LOGIST,),
+    "payment-types": (User.ROLE_LOGIST,),
+}
+
+
+def _can_manage_lookup(user, kind):
+    """Проверка права пользователя на изменение записи справочника `kind`."""
+    if user.is_admin_role:
+        return True
+    return user.role in _LOOKUP_OWNER_ROLES.get(kind, ())
+
+
+def lookup_permission_required(get_kind):
+    """Декоратор AJAX-эндпоинтов управления справочниками.
+
+    `get_kind` — функция, возвращающая вид справочника по аргументам view
+    (например, kwargs["kind"] или связка kind+pk). Для AJAX-эндпоинтов
+    вместо 403 возвращается JSON с ошибкой, чтобы фронт корректно показал alert.
+    """
+    def decorator(view):
+        @wraps(view)
+        @login_required
+        def wrapper(request, *args, **kwargs):
+            kind = get_kind(request, kwargs)
+            if not _can_manage_lookup(request.user, kind):
+                return JsonResponse({"error": "Недостаточно прав для изменения этого справочника"}, status=403)
+            return view(request, *args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def _lookup_kind_from_url(request, kwargs):
+    return kwargs.get("kind")
+
+
+def _fixed_kind(kind):
+    """Getter, всегда возвращающий фиксированный вид справочника."""
+    return lambda request, kwargs: kind
+
+
+def _address_kind(request, kwargs):
+    """Для эндпоинтов адресов заказчика: если адрес не найден, разрешаем
+    пройти дальше — view сам вернёт корректный 404."""
+    exists = CustomerAddress.objects.filter(pk=kwargs.get("pk")).exists()
+    return "customer-addresses" if exists else "customers"
+
+
 @login_required
 def home_redirect(request):
     user = request.user
@@ -370,7 +427,13 @@ def profile_index(request):
     user = request.user
 
     if request.method == "POST":
+        # Вид справочника в POST-запросах профиля определяется ролью пользователя.
+        directory_kind = "transport-companies" if user.is_logist else "customers"
+
         if "add_lookup" in request.POST:
+            if not _can_manage_lookup(user, directory_kind):
+                messages.error(request, "Недостаточно прав для изменения этого справочника.")
+                return redirect("core:profile_index")
             name = (request.POST.get("lookup_name") or "").strip()
             if name:
                 if user.is_logist:
@@ -382,6 +445,9 @@ def profile_index(request):
             return redirect("core:profile_index")
 
         elif "delete_lookup" in request.POST:
+            if not _can_manage_lookup(user, directory_kind):
+                messages.error(request, "Недостаточно прав для изменения этого справочника.")
+                return redirect("core:profile_index")
             pk = request.POST.get("lookup_pk")
             if pk:
                 if user.is_logist:
@@ -502,7 +568,7 @@ def ajax_search(request, kind):
 # AJAX: Создание и сохранение настроек
 # ============================================================
 
-@login_required
+@lookup_permission_required(_lookup_kind_from_url)
 @require_POST
 def ajax_create_lookup(request, kind):
     if kind not in _SEARCH_MAP: return JsonResponse({"error": "unknown kind"}, status=400)
@@ -587,6 +653,8 @@ _PREF_ATTR_MAP = {
 @login_required
 @require_GET
 def ajax_get_lookup_details(request, kind, pk):
+    # Чтение деталей доступно всем ролям (справочники видны в формах),
+    # но скрытые поля редакторов в UI включаются по правам (см. can_manage).
     try:
         if kind == "transport-companies":
             tc = TransportCompany.objects.get(pk=pk)
@@ -595,21 +663,23 @@ def ajax_get_lookup_details(request, kind, pk):
             return JsonResponse({
                 "id": tc.pk, "name": tc.name, "contact_person": tc.contact_person,
                 "phone": tc.phone, "email": tc.email,
-                "drivers": drivers, "vehicles": vehicles
+                "drivers": drivers, "vehicles": vehicles,
+                "can_manage": _can_manage_lookup(request.user, kind),
             })
         elif kind == "customers":
             c = Customer.objects.get(pk=pk)
             addresses = [{"id": a.pk, "info": a.info} for a in c.addresses.all()]
             return JsonResponse({
                 "id": c.pk, "name": c.name, "contact_person": c.contact_person,
-                "phone": c.phone, "email": c.email, "addresses": addresses
+                "phone": c.phone, "email": c.email, "addresses": addresses,
+                "can_manage": _can_manage_lookup(request.user, kind),
             })
     except (TransportCompany.DoesNotExist, Customer.DoesNotExist):
         return JsonResponse({"error": "Not found"}, status=404)
     return JsonResponse({"error": "Unknown kind"}, status=400)
 
 
-@login_required
+@lookup_permission_required(_lookup_kind_from_url)
 @require_POST
 def ajax_edit_lookup(request, kind, pk):
     name = (request.POST.get("name") or "").strip()
@@ -634,7 +704,7 @@ def ajax_edit_lookup(request, kind, pk):
         return JsonResponse({"error": "Not found"}, status=404)
 
 
-@login_required
+@lookup_permission_required(_fixed_kind("drivers"))
 @require_POST
 def ajax_delete_driver(request, pk):
     try:
@@ -644,7 +714,7 @@ def ajax_delete_driver(request, pk):
         return JsonResponse({"error": "Not found"}, status=404)
 
 
-@login_required
+@lookup_permission_required(_fixed_kind("vehicles"))
 @require_POST
 def ajax_delete_vehicle(request, pk):
     try:
@@ -654,7 +724,7 @@ def ajax_delete_vehicle(request, pk):
         return JsonResponse({"error": "Not found"}, status=404)
 
 
-@login_required
+@lookup_permission_required(_fixed_kind("drivers"))
 @require_POST
 def ajax_edit_driver(request, pk):
     try:
@@ -670,7 +740,7 @@ def ajax_edit_driver(request, pk):
         return JsonResponse({"error": "Not found"}, status=404)
 
 
-@login_required
+@lookup_permission_required(_fixed_kind("vehicles"))
 @require_POST
 def ajax_edit_vehicle(request, pk):
     try:
@@ -689,7 +759,7 @@ def ajax_edit_vehicle(request, pk):
         return JsonResponse({"error": "Not found"}, status=404)
 
 
-@login_required
+@lookup_permission_required(_address_kind)
 @require_POST
 def ajax_delete_customer_address(request, pk):
     try:
@@ -699,7 +769,7 @@ def ajax_delete_customer_address(request, pk):
         return JsonResponse({"error": "Not found"}, status=404)
 
 
-@login_required
+@lookup_permission_required(_fixed_kind("customers"))
 @require_POST
 def ajax_add_customer_address(request, pk):
     info = (request.POST.get("info") or "").strip()
@@ -712,7 +782,7 @@ def ajax_add_customer_address(request, pk):
         return JsonResponse({"error": "Customer not found"}, status=404)
 
 
-@login_required
+@lookup_permission_required(_address_kind)
 @require_POST
 def ajax_edit_customer_address(request, pk):
     info = (request.POST.get("info") or "").strip()
