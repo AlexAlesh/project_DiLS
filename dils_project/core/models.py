@@ -4,8 +4,6 @@
 
 import re
 from django.db import models
-from django.db.models import Q
-from django.db.models.deletion import ProtectedError
 from django.contrib.auth.models import AbstractUser
 
 
@@ -103,18 +101,6 @@ class TransportCompany(models.Model):
         ordering = ['name']
     def __str__(self): return self.name
 
-    def delete(self, *args, **kwargs):
-        """Защищает историю рейсов: ТК, чьи водители/машины участвовали в рейсах,
-        удалить нельзя — иначе каскад CASCADE затрет справочник вместе со следом
-        в выполненных рейсах."""
-        if Driver.objects.filter(transport_company=self, legs__isnull=False).exists() or \
-           Vehicle.objects.filter(transport_company=self, legs__isnull=False).exists():
-            raise ProtectedError(
-                f"Нельзя удалить ТК «{self.name}»: её водители или машины указаны в рейсах.",
-                list(self.legs.all()),
-            )
-        return super().delete(*args, **kwargs)
-
 
 class Brand(models.Model):
     name = models.CharField('Наименование', max_length=100, unique=True)
@@ -156,16 +142,6 @@ class Driver(models.Model):
         unique_together = [('transport_company', 'full_name')]
     def __str__(self): return self.full_name
 
-    def delete(self, *args, **kwargs):
-        """История рейсов не должна затираться: водителя, участвовавшего
-        в рейсах (в т.ч. выполненных), удалить нельзя — только переименовать/перенести."""
-        if self.legs.exists():
-            raise ProtectedError(
-                f"Нельзя удалить водителя «{self.full_name}»: он указан в рейсах.",
-                list(self.legs.all()),
-            )
-        return super().delete(*args, **kwargs)
-
 
 class Vehicle(models.Model):
     transport_company = models.ForeignKey(TransportCompany, on_delete=models.CASCADE, related_name='vehicles', verbose_name='Транспортная компания')
@@ -180,16 +156,6 @@ class Vehicle(models.Model):
         ordering = ['plate_number']
         unique_together = [('transport_company', 'plate_number')]
     def __str__(self): return f"{self.plate_number} ({self.brand.name})"
-
-    def delete(self, *args, **kwargs):
-        """Защищает историю рейсов: машину, указанную в рейсах, удалить нельзя."""
-        if self.legs.exists():
-            raise ProtectedError(
-                f"Нельзя удалить машину «{self.plate_number}»: она указана в рейсах.",
-                list(self.legs.all()),
-            )
-        return super().delete(*args, **kwargs)
-
     def save(self, *args, **kwargs):
         self.plate_number = format_plate_number(self.plate_number)
         super().save(*args, **kwargs)
@@ -228,50 +194,19 @@ class Trip(models.Model):
     def is_manager_filled(self) -> bool:
         return all([self.loading_date, self.unloading_date, self.customer])
 
-    def compute_status(self) -> str:
-        """Чистый расчет статуса без записи в БД.
-
-        Единый источник истины для статусов (см. LEG_STATUS_SQL — там же
-        лежит эквивалентный SQL-фильтр). Пустые плечи не считаются ни
-        «в работе», ни «выполненными»: заявка из одних пустых плеч — это
-        sent_to_work, а не черновик и не «в работе».
-        """
-        if not self.is_manager_filled():
-            return self.STATUS_DRAFT
-        filled = started = 0
-        for leg in self.legs.all():
-            if leg.is_filled():
-                filled += 1
-            elif leg.is_started():
-                started += 1
-        total = self.legs.count()
-        if total and filled == total:
-            return self.STATUS_COMPLETED
-        if filled or started:
-            return self.STATUS_IN_WORK
-        return self.STATUS_SENT_TO_WORK
-
-    def refresh_status(self, save=True) -> bool:
-        """Пересчитывает статус заявки. Возвращает True, если статус изменился.
-
-        Запись в БД выполняется через super().save() — это разрывает цикл
-        TripLeg.save() -> Trip.refresh_status() -> TripLeg-сигналы и не
-        порождает лишних UPDATE. Так как обновляется только служебное поле
-        status, запись помечается флагом _skip_history: сигнал post_save
-        (core/signals.py) по нему пропускает логирование в TripHistory,
-        чтобы пересчёт статуса не засорял историю изменений «менеджерских»
-        полей.
-        """
-        new_status = self.compute_status()
-        changed = self.status != new_status
-        self.status = new_status
-        if changed and save:
-            self._skip_history = True
-            try:
-                super().save(update_fields=['status', 'updated_at'])
-            finally:
-                del self._skip_history
-        return changed
+    def update_status(self):
+        legs = self.legs.all()
+        if not legs.exists():
+            self.status = self.STATUS_SENT_TO_WORK if self.is_manager_filled() else self.STATUS_DRAFT
+        elif all(leg.is_filled() for leg in legs):
+            self.status = self.STATUS_COMPLETED
+        elif any(leg.is_started() for leg in legs):
+            self.status = self.STATUS_IN_WORK
+        elif self.is_manager_filled():
+            self.status = self.STATUS_SENT_TO_WORK
+        else:
+            self.status = self.STATUS_DRAFT
+        self.save(update_fields=['status', 'updated_at'])
 
     @property
     def manager_display(self) -> str:
@@ -311,24 +246,7 @@ class TripLeg(models.Model):
         return all([self.transport_company, self.driver, self.vehicle, self.price is not None, self.payment_type])
 
     def is_started(self) -> bool:
-        return any([self.transport_company, self.driver, self.vehicle,
-                    self.price is not None, self.payment_type,
-                    self.ttn_number, self.logist_comment])
-
-    # --- SQL-эквиваленты (единый источник истины со статусной логикой) ---
-    # Заполненное плечо == completed. Эквивалент is_filled().
-    FILLED_SQL = Q(transport_company__isnull=False, driver__isnull=False,
-                   vehicle__isnull=False, price__isnull=False, payment_type__isnull=False)
-    # Начатое, но не заполненное плечо. Эквивалент is_started() AND NOT is_filled().
-    STARTED_SQL = (Q(transport_company__isnull=False) | Q(driver__isnull=False) |
-                   Q(vehicle__isnull=False) | Q(price__isnull=False) |
-                   Q(payment_type__isnull=False) | ~Q(ttn_number='') |
-                   ~Q(logist_comment='')) & ~FILLED_SQL
-    # Пустое плечо — эквивалент not is_started().
-    EMPTY_SQL = (Q(transport_company__isnull=True) & Q(driver__isnull=True) &
-                 Q(vehicle__isnull=True) & Q(price__isnull=True) &
-                 Q(payment_type__isnull=True) & Q(ttn_number='') &
-                 Q(logist_comment=''))
+        return any([self.transport_company, self.driver, self.vehicle, self.price is not None, self.payment_type, self.ttn_number])
 
     @property
     def status(self) -> str:
@@ -336,14 +254,8 @@ class TripLeg(models.Model):
         if self.is_started(): return self.STATUS_IN_WORK
         return self.STATUS_DRAFT
 
-    def refresh_trip_status(self):
-        """Пересчитывает статус заявки после изменений в этом рейсе.
-
-        Вызывается явно из точек записи (save_logist_part, mark_as_viewed,
-        delete), а НЕ из TripLeg.save() — иначе получаем цикл
-        TripLeg.save -> Trip.save -> сигналы -> лишние UPDATE.
-        """
-        self.trip.refresh_status()
+    def update_trip_status(self):
+        self.trip.update_status()
 
     @property
     def is_new_for_logist(self) -> bool:
@@ -362,31 +274,8 @@ class TripLeg(models.Model):
         return self.vehicle.plate_number if self.vehicle else ''
 
     def save(self, *args, **kwargs):
-        """Сохраняет рейс и пересчитывает статус заявки.
-
-        Рекурсия исключена: Trip.refresh_status() пишет в БД через
-        super().save(), минуя переопределенный Trip.save(), а сигналы
-        Trip не дергают TripLeg. Флаг _skip_trip_refresh позволяет точкам
-        записи (например, массовому пересчету) подавить каскад.
-        """
-        skip_refresh = kwargs.pop('_skip_trip_refresh', False)
         super().save(*args, **kwargs)
-        if not skip_refresh:
-            self.refresh_trip_status()
-
-    def delete(self, *args, **kwargs):
-        """Удаляет рейс и пересчитывает статус заявки.
-
-        Поддерживает _skip_trip_refresh (см. suppress_trip_refresh) и
-        queryset-вызовы (on_delete=CASCADE обходит этот метод — там
-        пересчет не нужен, заявка удаляется целиком).
-        """
-        skip_refresh = kwargs.pop('_skip_trip_refresh', False)
-        trip = self.trip
-        super().delete(*args, **kwargs)
-        # Статус заявки мог измениться (например, все рейсы удалены).
-        if not skip_refresh:
-            trip.refresh_status()
+        self.update_trip_status()
 
 
 class TripHistory(models.Model):

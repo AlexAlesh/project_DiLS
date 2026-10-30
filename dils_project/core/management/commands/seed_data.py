@@ -115,6 +115,6 @@ class Command(BaseCommand):
         )
 
         for t in Trip.objects.all():
-            t.refresh_status()
+            t.update_status()
 
         self.stdout.write("  + заявки и рейсы")

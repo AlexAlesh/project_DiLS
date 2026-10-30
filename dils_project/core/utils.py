@@ -156,55 +156,8 @@ def apply_filters(qs, params, allowed_keys, registry, is_leg=False):
 # ============================================================
 # ДАШБОРДЫ
 # ============================================================
-#
-# Статусная логика живёт в одном месте: Trip.compute_status() (Python)
-# и TripLeg.FILLED_SQL / STARTED_SQL / EMPTY_SQL (эквивалентные Q-объекты).
-# Все SQL-фильтры ниже построены на этих Q-объектах — рассинхрон Python/SQL
-# исключён конструктивно.
-
-PAGE_SIZE = 50  # размер страницы для всех списков
 
 DASHBOARD_PARAMS = ('no_driver', 'no_price', 'status')
-
-
-def apply_dashboard_params(qs, request):
-    """Применяет к queryset dashboard-параметры из GET (?status=..., ?no_driver=1...).
-
-    Работает и с Trip-, и с TripLeg-queryset'ами: для legs статусные
-    фильтры берутся из Q-объектов модели TripLeg (FILLED/STARTED/EMPTY),
-    что гарантирует совпадение с Python-логикой is_filled()/is_started().
-    Для trips фильтруем по материализованному полю Trip.status.
-    """
-    if request is None:
-        return qs
-    get = request.GET
-    status_param = get.get('status')
-    no_driver = get.get('no_driver') == '1'
-    no_price = get.get('no_price') == '1'
-    leg = qs.model is TripLeg
-
-    if status_param == Trip.STATUS_COMPLETED:
-        qs = qs.filter(TripLeg.FILLED_SQL) if leg else qs.filter(status=Trip.STATUS_COMPLETED)
-    elif status_param == Trip.STATUS_IN_WORK:
-        if leg:
-            # «В работе» = начатые, но не заполненные плечи
-            # (пустые сюда не попадают — см. compute_status()).
-            qs = qs.filter(TripLeg.STARTED_SQL)
-        else:
-            qs = qs.filter(status__in=[Trip.STATUS_SENT_TO_WORK, Trip.STATUS_IN_WORK])
-    elif status_param == Trip.STATUS_DRAFT:
-        qs = qs.filter(trip__status=Trip.STATUS_DRAFT) if leg else qs.filter(status=Trip.STATUS_DRAFT)
-    elif status_param == Trip.STATUS_SENT_TO_WORK:
-        qs = qs.filter(TripLeg.EMPTY_SQL) if leg else qs.filter(status=Trip.STATUS_SENT_TO_WORK)
-
-    if no_driver:
-        qs = qs.filter(driver__isnull=True) if leg else \
-            qs.filter(legs__driver__isnull=True).distinct()
-    if no_price:
-        qs = qs.filter(price__isnull=True) if leg else \
-            qs.filter(legs__price__isnull=True).distinct()
-    return qs
-
 
 def build_dashboard_query(key, request):
     if request is None: return "?"
@@ -213,7 +166,6 @@ def build_dashboard_query(key, request):
         if p in params: del params[p]
     if key == 'completed': params['status'] = 'completed'
     elif key == 'in_work': params['status'] = 'in_work'
-    elif key == 'sent_to_work': params['status'] = 'sent_to_work'
     elif key == 'no_driver': params['no_driver'] = '1'
     elif key == 'no_price': params['no_price'] = '1'
     elif key == 'draft': params['status'] = 'draft'
@@ -226,7 +178,6 @@ def is_dashboard_active(key, request):
     if key == 'all': return not any(p in get for p in DASHBOARD_PARAMS)
     if key == 'completed': return get.get('status') == 'completed'
     if key == 'in_work': return get.get('status') == 'in_work'
-    if key == 'sent_to_work': return get.get('status') == 'sent_to_work'
     if key == 'no_driver': return get.get('no_driver') == '1'
     if key == 'no_price': return get.get('no_price') == '1'
     if key == 'draft': return get.get('status') == 'draft'
@@ -234,46 +185,39 @@ def is_dashboard_active(key, request):
 
 
 # --- Дашборды для Заявок (Trip) ---
-# Считаются по материализованному полю Trip.status, которое поддерживается
-# в актуальном состоянии через Trip.refresh_status()/compute_status().
-def _count_trips_all(qs): return qs.count()
-def _count_trips_completed(qs): return qs.filter(status=Trip.STATUS_COMPLETED).count()
-def _count_trips_in_work(qs): return qs.filter(status=Trip.STATUS_IN_WORK).count()
-def _count_trips_sent_to_work(qs): return qs.filter(status=Trip.STATUS_SENT_TO_WORK).count()
+def _count_trips_all(qs): return qs.exclude(status='draft').count()
+def _count_trips_completed(qs): return qs.filter(status='completed').count()
+def _count_trips_in_work(qs): return qs.filter(status__in=['sent_to_work', 'in_work']).count()
 def _count_trips_no_driver(qs):
-    return qs.filter(legs__driver__isnull=True).distinct().count()
+    return qs.filter(legs__driver__isnull=True).exclude(status='draft').distinct().count()
 def _count_trips_no_price(qs):
-    return qs.filter(legs__price__isnull=True).distinct().count()
-def _count_trips_draft(qs): return qs.filter(status=Trip.STATUS_DRAFT).count()
+    return qs.filter(legs__price__isnull=True).exclude(status='draft').distinct().count()
+def _count_trips_draft(qs): return qs.filter(status='draft').count()
 
 TRIPS_DASHBOARDS = [
-    {'key': 'all',          'label': 'Все заявки',   'style': 'primary',   'resolver': _count_trips_all},
-    {'key': 'completed',    'label': 'Завершённые',  'style': 'success',   'resolver': _count_trips_completed},
-    {'key': 'in_work',      'label': 'В работе',     'style': 'info',      'resolver': _count_trips_in_work},
-    {'key': 'sent_to_work', 'label': 'Ожидают рейсов', 'style': 'warning', 'resolver': _count_trips_sent_to_work},
-    {'key': 'no_driver',    'label': 'Без водителя', 'style': 'warning',   'resolver': _count_trips_no_driver},
-    {'key': 'no_price',     'label': 'Без цены',     'style': 'danger',    'resolver': _count_trips_no_price},
-    {'key': 'draft',        'label': 'Черновики',    'style': 'secondary', 'resolver': _count_trips_draft},
+    {'key': 'all',       'label': 'Все заявки',   'style': 'primary', 'resolver': _count_trips_all},
+    {'key': 'completed', 'label': 'Завершённые',  'style': 'success', 'resolver': _count_trips_completed},
+    {'key': 'in_work',   'label': 'В работе',     'style': 'info',    'resolver': _count_trips_in_work},
+    {'key': 'no_driver', 'label': 'Без водителя', 'style': 'warning', 'resolver': _count_trips_no_driver},
+    {'key': 'no_price',  'label': 'Без цены',     'style': 'danger',  'resolver': _count_trips_no_price},
+    {'key': 'draft',     'label': 'Черновики',    'style': 'secondary', 'resolver': _count_trips_draft},
 ]
 
 
 # --- Дашборды для Рейсов (TripLeg) ---
-# FILLED_SQL/STARTED_SQL/EMPTY_SQL определены в модели TripLeg рядом с
-# is_filled()/is_started(), чтобы Python- и SQL-логика не разъезжались.
 def _count_legs_all(qs): return qs.count()
-def _count_legs_completed(qs): return qs.filter(TripLeg.FILLED_SQL).count()
-def _count_legs_in_work(qs): return qs.filter(TripLeg.STARTED_SQL).count()
-def _count_legs_sent_to_work(qs): return qs.filter(TripLeg.EMPTY_SQL).count()
+def _count_legs_completed(qs):
+    return qs.filter(transport_company__isnull=False, driver__isnull=False, vehicle__isnull=False, price__isnull=False, payment_type__isnull=False).count()
+def _count_legs_in_work(qs): return qs.count() - _count_legs_completed(qs)
 def _count_legs_no_driver(qs): return qs.filter(driver__isnull=True).count()
 def _count_legs_no_price(qs): return qs.filter(price__isnull=True).count()
 
 REQUESTS_DASHBOARDS = [
-    {'key': 'all',          'label': 'Все рейсы',    'style': 'primary',   'resolver': _count_legs_all},
-    {'key': 'completed',    'label': 'Завершённые',  'style': 'success',   'resolver': _count_legs_completed},
-    {'key': 'in_work',      'label': 'В работе',     'style': 'info',      'resolver': _count_legs_in_work},
-    {'key': 'sent_to_work', 'label': 'Пустые',       'style': 'warning',   'resolver': _count_legs_sent_to_work},
-    {'key': 'no_driver',    'label': 'Без водителя', 'style': 'warning',   'resolver': _count_legs_no_driver},
-    {'key': 'no_price',     'label': 'Без цены',     'style': 'danger',    'resolver': _count_legs_no_price},
+    {'key': 'all',       'label': 'Все рейсы',    'style': 'primary', 'resolver': _count_legs_all},
+    {'key': 'completed', 'label': 'Завершённые',  'style': 'success', 'resolver': _count_legs_completed},
+    {'key': 'in_work',   'label': 'В работе',     'style': 'info',    'resolver': _count_legs_in_work},
+    {'key': 'no_driver', 'label': 'Без водителя', 'style': 'warning', 'resolver': _count_legs_no_driver},
+    {'key': 'no_price',  'label': 'Без цены',     'style': 'danger',  'resolver': _count_legs_no_price},
 ]
 
 

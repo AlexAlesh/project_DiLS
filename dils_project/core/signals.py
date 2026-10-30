@@ -65,11 +65,6 @@ def trip_pre_save(sender, instance, **kwargs):
 
 @receiver(post_save, sender=Trip)
 def trip_post_save(sender, instance, created, **kwargs):
-    # Пересчёт служебного поля status (Trip.refresh_status) не должен
-    # порождать записей в истории изменений менеджерских полей.
-    if getattr(instance, '_skip_history', False):
-        return
-
     user = get_current_user()
 
     if created:

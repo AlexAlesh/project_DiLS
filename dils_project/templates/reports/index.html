@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% load static dils_tags %}
+{% load dils_tags %}
 
 {% block title %}Отчёты · DiLS{% endblock %}
 
 {% block content %}
 
-<div class="page-header">
-    <h1>Отчёты</h1>
-    <span class="text-muted small"><i class="bi bi-info-circle me-1"></i> Считаются только завершённые рейсы</span>
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h4 mb-0">Отчёты</h1>
+    <small class="text-muted"><i class="bi bi-info-circle me-1"></i> Считаются только завершённые рейсы</small>
 </div>
 
 {# ---------- Дашборды ---------- #}
@@ -18,15 +18,15 @@
 
 {# ---------- Сводка (в виде плиток) ---------- #}
 <div class="d-flex flex-wrap gap-3 mb-3">
-    <div class="data-box flex-grow-1" style="min-width: 200px;">
+    <div class="data-box flex-grow-1" style="min-width: 200px; padding: 12px 16px;">
         <span class="data-label">Рейсов</span>
         <span class="data-value fs-3 fw-bold text-dark">{{ count }}</span>
     </div>
-    <div class="data-box flex-grow-1" style="min-width: 200px;">
+    <div class="data-box flex-grow-1" style="min-width: 200px; padding: 12px 16px;">
         <span class="data-label">Наличные</span>
         <span class="data-value fs-3 fw-bold text-success">{{ cash_sum|format_money }}</span>
     </div>
-    <div class="data-box flex-grow-1" style="min-width: 200px;">
+    <div class="data-box flex-grow-1" style="min-width: 200px; padding: 12px 16px;">
         <span class="data-label">Безналичные</span>
         <span class="data-value fs-3 fw-bold text-primary">{{ cashless_sum|format_money }}</span>
     </div>
@@ -35,7 +35,7 @@
 {# ---------- Итоговая ---------- #}
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body d-flex justify-content-between align-items-center py-3">
-        <span class="panel-title">Итоговая сумма по цене</span>
+        <span class="text-muted fw-bold text-uppercase" style="letter-spacing: 0.5px;">Итоговая сумма по цене</span>
         <span class="fs-2 fw-bold text-dark">{{ total_sum|format_money }}</span>
     </div>
 </div>
@@ -158,6 +158,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/filters.js' %}"></script>
-<script src="{% static 'js/charts.js' %}"></script>
+<script src="/static/js/filters.js"></script>
+<script src="/static/js/charts.js"></script>
 {% endblock %}

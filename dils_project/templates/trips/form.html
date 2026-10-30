@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static dils_tags %}
+{% load dils_tags %}
 
 {% block title %}
     {% if mode == "create" %}Новая заявка{% else %}Заявка #{{ trip.pk }} — редактирование{% endif %} · DiLS
@@ -60,7 +60,9 @@
                         <div class="col-md-4">
                             <div class="data-box w-100">
                                 <span class="data-label">Количество рейсов</span>
-                                {{ form.trips_count }}
+                                <div style="padding: 4px 8px;">
+                                    {{ form.trips_count }}
+                                </div>
                             </div>
                             {% if form.trips_count.errors %}<div class="text-danger small mt-1">{{ form.trips_count.errors|join:", " }}</div>{% endif %}
                         </div>
@@ -94,12 +96,14 @@
                         <div class="col-12 mt-3">
                             <div class="data-box w-100">
                                 <span class="data-label">{{ form.delivery_info.label }}</span>
-                                {{ form.delivery_info }}
+                                <div style="padding: 4px 8px;">
+                                    {{ form.delivery_info }}
+                                </div>
                             </div>
 
                             {# БЛОК С ИСТОРИЕЙ АДРЕСОВ #}
                             <div id="customer-addresses-container" class="mt-2 d-none">
-                                <span class="panel-title">Ранее использованные адреса:</span>
+                                <span class="text-muted small fw-bold text-uppercase" style="font-size: 10px;">Ранее использованные адреса:</span>
                                 <div id="customer-addresses-list" class="d-flex flex-wrap gap-1 mt-1"></div>
                             </div>
 
@@ -152,7 +156,9 @@
                         <div class="col-md-6">
                             <div class="data-box w-100">
                                 <span class="data-label">{{ form.price.label }} (руб.)</span>
-                                {{ form.price }}
+                                <div style="padding: 4px 8px;">
+                                    {{ form.price }}
+                                </div>
                             </div>
                             {% if form.price.errors %}<div class="text-danger small mt-1">{{ form.price.errors|join:", " }}</div>{% endif %}
                         </div>
@@ -171,7 +177,9 @@
                         <div class="col-md-6">
                             <div class="data-box w-100">
                                 <span class="data-label">{{ form.ttn_number.label }}</span>
-                                {{ form.ttn_number }}
+                                <div style="padding: 4px 8px;">
+                                    {{ form.ttn_number }}
+                                </div>
                             </div>
                             {% if form.ttn_number.errors %}<div class="text-danger small mt-1">{{ form.ttn_number.errors|join:", " }}</div>{% endif %}
                         </div>
@@ -180,7 +188,7 @@
             </div>
             {% endif %}
 
-            <div class="form-actions">
+            <div class="d-flex gap-2 mb-5">
                 <button type="submit" class="btn btn-primary px-4">
                     <i class="bi bi-check-lg"></i> Сохранить
                 </button>
@@ -242,6 +250,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/filters.js' %}"></script>
-<script src="{% static 'js/plate_number.js' %}"></script>
+<script src="/static/js/filters.js"></script>
+<script src="/static/js/plate_number.js"></script>
 {% endblock %}

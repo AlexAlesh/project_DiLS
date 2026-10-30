@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static dils_tags %}
+{% load dils_tags %}
 
 {% block title %}Заявка #{{ leg.trip.pk }} — Рейс #{{ leg_ordinal }} · DiLS{% endblock %}
 
@@ -38,7 +38,7 @@
 <div class="card border-0 shadow-sm mb-3"
      style="border-left: 6px solid {{ leg.trip.manager.color|default:'#0d6efd' }}; background-color: {{ leg.trip.manager.bg_color|default:'#ffffff' }};">
     <div class="card-header bg-transparent py-2 border-bottom d-flex align-items-center gap-2">
-        <span class="badge role-badge w-auto px-2 py-1" style="background-color: {{ leg.trip.manager.role_color|default:'#6c757d' }};">
+        <span class="badge" style="background-color: {{ leg.trip.manager.role_color|default:'#6c757d' }}; color: #fff;">
             МЕНЕДЖЕР
         </span>
         <span class="fw-bold text-dark">Данные менеджера</span>
@@ -115,7 +115,9 @@
                 <div class="col-md-6">
                     <div class="data-box w-100">
                         <span class="data-label">{{ form.price.label }} (руб.)</span>
-                        {{ form.price }}
+                        <div style="padding: 4px 8px;">
+                            {{ form.price }}
+                        </div>
                     </div>
                     {% if form.price.errors %}<div class="text-danger small mt-1">{{ form.price.errors|join:", " }}</div>{% endif %}
                 </div>
@@ -134,7 +136,9 @@
                 <div class="col-md-6">
                     <div class="data-box w-100">
                         <span class="data-label">{{ form.ttn_number.label }}</span>
-                        {{ form.ttn_number }}
+                        <div style="padding: 4px 8px;">
+                            {{ form.ttn_number }}
+                        </div>
                     </div>
                     {% if form.ttn_number.errors %}<div class="text-danger small mt-1">{{ form.ttn_number.errors|join:", " }}</div>{% endif %}
                 </div>
@@ -143,7 +147,9 @@
                 <div class="col-12 mt-2">
                     <div class="data-box w-100">
                         <span class="data-label">{{ form.logist_comment.label }}</span>
-                        {{ form.logist_comment }}
+                        <div style="padding: 4px 8px;">
+                            {{ form.logist_comment }}
+                        </div>
                     </div>
                     {% if form.logist_comment.errors %}<div class="text-danger small mt-1">{{ form.logist_comment.errors|join:", " }}</div>{% endif %}
                 </div>
@@ -151,7 +157,7 @@
         </div>
     </div>
 
-    <div class="form-actions">
+    <div class="d-flex gap-2">
         <button type="submit" class="btn btn-primary px-4">
             <i class="bi bi-check-lg"></i> Сохранить рейс
         </button>
@@ -204,6 +210,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/filters.js' %}"></script>
-<script src="{% static 'js/plate_number.js' %}"></script>
+<script src="/static/js/filters.js"></script>
+<script src="/static/js/plate_number.js"></script>
 {% endblock %}

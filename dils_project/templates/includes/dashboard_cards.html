@@ -1,9 +1,9 @@
 {% load dils_tags %}
 {% with page_key=kind %}
 
-<div class="tile-panel" id="dils-dashboards-wrapper">
+<div class="tile-panel" id="dils-dashboards-wrapper" style="padding: 12px !important; margin-bottom: 12px !important;">
     <div class="d-flex justify-content-between align-items-center mb-2">
-        <span class="panel-title">Сводка</span>
+        <span class="small text-muted fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 11px;">Сводка</span>
         <button type="button" class="btn btn-sm btn-light border text-muted py-0 px-2" data-bs-toggle="modal" data-bs-target="#dilsDashboardsSettingsModal" title="Настроить сводку">
             <i class="bi bi-sliders"></i>
         </button>
@@ -12,16 +12,16 @@
     <div class="d-flex flex-wrap gap-2 align-items-stretch">
         {% for d in dashboards %}
         {% if d.url %}
-            <a href="{{ d.url }}" class="data-box flex-fill text-decoration-none dashboard-card {% if d.active %}active border-primary{% endif %}" style="min-width: 110px;">
+            <a href="{{ d.url }}" class="data-box flex-fill text-decoration-none {% if d.active %}active border-primary{% endif %}" style="min-width: 110px; padding: 0 !important;">
                 <div class="data-label">{{ d.label }}</div>
-                <div class="data-value fs-5 text-{{ d.style }}">
+                <div class="data-value fs-5 text-{{ d.style }}" style="padding: 4px 8px !important;">
                     {% if kind == "reports" %}{{ d.count|format_money }}{% else %}{{ d.count }}{% endif %}
                 </div>
             </a>
         {% else %}
-            <div class="data-box flex-fill" style="min-width: 110px;">
+            <div class="data-box flex-fill" style="min-width: 110px; padding: 0 !important;">
                 <div class="data-label">{{ d.label }}</div>
-                <div class="data-value fs-5 text-{{ d.style }}">
+                <div class="data-value fs-5 text-{{ d.style }}" style="padding: 4px 8px !important;">
                     {% if kind == "reports" %}{{ d.count|format_money }}{% else %}{{ d.count }}{% endif %}
                 </div>
             </div>
