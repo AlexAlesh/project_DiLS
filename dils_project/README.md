@@ -135,7 +135,6 @@ dils_project/
 │   │   └── parser_service.py
 │   ├── management/commands/
 │   │   └── seed_data.py
-│   └── tests/
 ├── templates/               # HTML-шаблоны
 ├── static/                  # CSS/JS
 ├── media/                   # загружаемые файлы (сейчас пусто)
@@ -167,7 +166,7 @@ dils_project/
   (`report_service.py` готов, но ещё не подключён к views)
 - 📱 Мобильное меню (offcanvas)
 - 🔁 Импорт/экспорт в Excel
-- 🧪 Тесты (`core/tests/` — заглушки)
+- 🧪 Тесты — будут написаны после завершения основной функциональности
 
 ---
 
