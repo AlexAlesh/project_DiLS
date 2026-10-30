@@ -245,18 +245,22 @@ class Trip(models.Model):
 
         Запись в БД выполняется через super().save() — это разрывает цикл
         TripLeg.save() -> Trip.refresh_status() -> TripLeg-сигналы и не
-        порождает лишних UPDATE.
+        порождает лишних UPDATE. Так как обновляется только служебное поле
+        status, запись помечается флагом _skip_history: сигнал post_save
+        (core/signals.py) по нему пропускает логирование в TripHistory,
+        чтобы пересчёт статуса не засорял историю изменений «менеджерских»
+        полей.
         """
         new_status = self.compute_status()
         changed = self.status != new_status
         self.status = new_status
         if changed and save:
-            super().save(update_fields=['status', 'updated_at'])
+            self._skip_history = True
+            try:
+                super().save(update_fields=['status', 'updated_at'])
+            finally:
+                del self._skip_history
         return changed
-
-    # Обратная совместимость: старый вызов из сигналов/вьюх.
-    def update_status(self):
-        self.refresh_status()
 
     @property
     def manager_display(self) -> str:

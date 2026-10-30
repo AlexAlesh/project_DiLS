@@ -93,6 +93,15 @@ class VehicleForm(forms.ModelForm):
 # ============================================================
 
 class TripManagerForm(forms.ModelForm):
+    """Форма части менеджера в заявке.
+
+    Поддерживает два способа задания заказчика:
+      1. Выбор из выпадающего списка (поле ``customer``).
+      2. Создание нового заказчика по имени — через скрытое поле
+         ``new_customer_name`` (заполняется JS при вводе текста поиска).
+
+    При отсутствии ``trips_count`` в POST используется default модели (1).
+    """
     new_customer_name = forms.CharField(widget=forms.HiddenInput(), required=False)
 
     class Meta:
@@ -112,8 +121,11 @@ class TripManagerForm(forms.ModelForm):
         # trips_count необязателен в POST: если поле отсутствует или пустое,
         # используем default из модели (1). Модель гарантирует default=1.
         self.fields["trips_count"].required = False
+
+        # Ограничиваем queryset заказчика для менеджера: свои + общие.
         q = Q(manager__isnull=True)
-        if user and user.is_manager: q |= Q(manager=user)
+        if user and user.is_manager:
+            q |= Q(manager=user)
         if self.instance and self.instance.pk and self.instance.customer_id:
             q |= Q(pk=self.instance.customer_id)
 
@@ -137,7 +149,8 @@ class TripManagerForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         customer = cleaned.get("customer")
-        # Создание нового заказчика по имени (скрытое поле new_customer_name).
+
+        # Если заказчик не выбран из списка, но передано имя нового — создаём.
         if not customer:
             raw_name = (self.data.get("new_customer_name") or "").strip() \
                 if hasattr(self.data, "get") else ""
