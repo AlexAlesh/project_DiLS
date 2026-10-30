@@ -192,8 +192,14 @@ class TripManagerForm(forms.ModelForm):
                 for _ in range(target_count - current_count):
                     TripLeg.objects.create(trip=instance)
             elif target_count < current_count:
-                empty_legs = instance.legs.filter(transport_company__isnull=True, driver__isnull=True, vehicle__isnull=True, price__isnull=True)
-                for leg in empty_legs[current_count - target_count:]:
+                # Удаляем только пустые рейсы (с конца); заполненные не трогаем.
+                empty_legs = list(instance.legs.filter(
+                    transport_company__isnull=True, driver__isnull=True,
+                    vehicle__isnull=True, price__isnull=True,
+                    payment_type__isnull=True, ttn_number='',
+                ).order_by('-id'))
+                to_delete = len(empty_legs) - target_count
+                for leg in empty_legs[:max(to_delete, 0)]:
                     leg.delete()
         return instance
 

@@ -2,6 +2,8 @@
 Бизнес-логика работы с заявками и рейсами.
 """
 
+from contextlib import contextmanager
+
 from django.db import transaction
 from ..models import Trip, TripLeg
 
@@ -66,19 +68,30 @@ def save_manager_part(trip, form, manager=None):
         for field in MANAGER_FIELDS:
             setattr(trip, field, getattr(instance, field))
 
-    trip.save()
+    # Для новой заявки (без pk) пересчет на этом этапе невозможен —
+    # форма сохранит Trip с дефолтным статусом, финальный пересчет
+    # выполнится ниже после досоздания рейсов.
+    if trip.pk:
+        trip.refresh_status(save=False)
 
-    # Передаем сохраненный экземпляр обратно в форму и вызываем ее save(),
-    # чтобы сработала логика досоздания TripLeg (рейсов).
+    # Передаем сохраненный экземпляр обратно в форму и вызываем ее save():
+    # форма сохранит Trip (одним UPDATE, уже с актуальным статусом)
+    # и выполнит досоздание/удаление TripLeg.
     form.instance = trip
-    form.save()
+    with suppress_trip_refresh():
+        trip = form.save()
 
+    trip.refresh_status()
     return trip
 
 
 @transaction.atomic
 def save_logist_part(leg, form):
-    """Сохраняет часть логиста (поля рейса)."""
+    """Сохраняет часть рейса (поля логиста).
+
+    Статус заявки пересчитывает TripLeg.save() — здесь повторного
+    сохранения leg не требуется.
+    """
     instance = form.save(commit=False)
     for field in LOGIST_FIELDS:
         setattr(leg, field, getattr(instance, field))
@@ -90,8 +103,37 @@ def save_logist_part(leg, form):
 # Прочее
 # ============================================================
 
+@contextmanager
+def suppress_trip_refresh():
+    """Временно подавляет каскадный пересчет статуса Trip при save/delete TripLeg.
+
+    Используется, когда вызывающий код сам пересчитывает статус одним
+    UPDATE после всех изменений (см. save_manager_part), чтобы не плодить
+    лишние записи в БД.
+    """
+    original_save = TripLeg.save
+    original_delete = TripLeg.delete
+
+    def silent_save(self, *args, **kwargs):
+        kwargs['_skip_trip_refresh'] = True
+        original_save(self, *args, **kwargs)
+
+    def silent_delete(self, *args, **kwargs):
+        kwargs['_skip_trip_refresh'] = True
+        original_delete(self, *args, **kwargs)
+
+    TripLeg.save = silent_save
+    TripLeg.delete = silent_delete
+    try:
+        yield
+    finally:
+        TripLeg.save = original_save
+        TripLeg.delete = original_delete
+
+
 def mark_as_viewed(leg: TripLeg) -> None:
     """Помечает рейс как просмотренный логистом."""
     if not leg.logist_viewed:
         leg.logist_viewed = True
-        leg.save(update_fields=["logist_viewed"])
+        # Флаг просмотра не влияет на статус — пересчет не нужен.
+        leg.save(update_fields=["logist_viewed"], _skip_trip_refresh=True)

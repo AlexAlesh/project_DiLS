@@ -227,19 +227,36 @@ class Trip(models.Model):
     def is_manager_filled(self) -> bool:
         return all([self.loading_date, self.unloading_date, self.customer])
 
+    def compute_status(self) -> str:
+        """Чистый расчет статуса без записи в БД."""
+        legs = list(self.legs.all())
+        if not legs:
+            return self.STATUS_SENT_TO_WORK if self.is_manager_filled() else self.STATUS_DRAFT
+        if all(leg.is_filled() for leg in legs):
+            return self.STATUS_COMPLETED
+        if any(leg.is_started() for leg in legs):
+            return self.STATUS_IN_WORK
+        if self.is_manager_filled():
+            return self.STATUS_SENT_TO_WORK
+        return self.STATUS_DRAFT
+
+    def refresh_status(self, save=True) -> bool:
+        """Пересчитывает статус заявки. Возвращает True, если статус изменился.
+
+        Запись в БД выполняется через super().save() — это разрывает цикл
+        TripLeg.save() -> Trip.refresh_status() -> TripLeg-сигналы и не
+        порождает лишних UPDATE.
+        """
+        new_status = self.compute_status()
+        changed = self.status != new_status
+        self.status = new_status
+        if changed and save:
+            super().save(update_fields=['status', 'updated_at'])
+        return changed
+
+    # Обратная совместимость: старый вызов из сигналов/вьюх.
     def update_status(self):
-        legs = self.legs.all()
-        if not legs.exists():
-            self.status = self.STATUS_SENT_TO_WORK if self.is_manager_filled() else self.STATUS_DRAFT
-        elif all(leg.is_filled() for leg in legs):
-            self.status = self.STATUS_COMPLETED
-        elif any(leg.is_started() for leg in legs):
-            self.status = self.STATUS_IN_WORK
-        elif self.is_manager_filled():
-            self.status = self.STATUS_SENT_TO_WORK
-        else:
-            self.status = self.STATUS_DRAFT
-        self.save(update_fields=['status', 'updated_at'])
+        self.refresh_status()
 
     @property
     def manager_display(self) -> str:
@@ -287,8 +304,14 @@ class TripLeg(models.Model):
         if self.is_started(): return self.STATUS_IN_WORK
         return self.STATUS_DRAFT
 
-    def update_trip_status(self):
-        self.trip.update_status()
+    def refresh_trip_status(self):
+        """Пересчитывает статус заявки после изменений в этом рейсе.
+
+        Вызывается явно из точек записи (save_logist_part, mark_as_viewed,
+        delete), а НЕ из TripLeg.save() — иначе получаем цикл
+        TripLeg.save -> Trip.save -> сигналы -> лишние UPDATE.
+        """
+        self.trip.refresh_status()
 
     @property
     def is_new_for_logist(self) -> bool:
@@ -307,8 +330,31 @@ class TripLeg(models.Model):
         return self.vehicle.plate_number if self.vehicle else ''
 
     def save(self, *args, **kwargs):
+        """Сохраняет рейс и пересчитывает статус заявки.
+
+        Рекурсия исключена: Trip.refresh_status() пишет в БД через
+        super().save(), минуя переопределенный Trip.save(), а сигналы
+        Trip не дергают TripLeg. Флаг _skip_trip_refresh позволяет точкам
+        записи (например, массовому пересчету) подавить каскад.
+        """
+        skip_refresh = kwargs.pop('_skip_trip_refresh', False)
         super().save(*args, **kwargs)
-        self.update_trip_status()
+        if not skip_refresh:
+            self.refresh_trip_status()
+
+    def delete(self, *args, **kwargs):
+        """Удаляет рейс и пересчитывает статус заявки.
+
+        Поддерживает _skip_trip_refresh (см. suppress_trip_refresh) и
+        queryset-вызовы (on_delete=CASCADE обходит этот метод — там
+        пересчет не нужен, заявка удаляется целиком).
+        """
+        skip_refresh = kwargs.pop('_skip_trip_refresh', False)
+        trip = self.trip
+        super().delete(*args, **kwargs)
+        # Статус заявки мог измениться (например, все рейсы удалены).
+        if not skip_refresh:
+            trip.refresh_status()
 
 
 class TripHistory(models.Model):
