@@ -31,9 +31,9 @@ from .services.trip_service import (
     save_logist_part, save_manager_part, trips_base_queryset, legs_base_queryset,
 )
 from .utils import (
-    REPORTS_DASHBOARDS, REPORTS_FILTERS, REQUESTS_DASHBOARDS,
+    PAGE_SIZE, REPORTS_DASHBOARDS, REPORTS_FILTERS, REQUESTS_DASHBOARDS,
     REQUESTS_FILTERS, TRIPS_DASHBOARDS, TRIPS_FILTERS,
-    apply_filters, compute_dashboards, parse_date,
+    apply_dashboard_params, apply_filters, compute_dashboards, parse_date,
 )
 
 
@@ -145,24 +145,17 @@ def _build_list_context(request, *, kind):
             elif m_filter != "":
                 qs = qs.filter(manager_id=m_filter)
 
+        # Черновики скрыты, пока не выбран статус «черновик» явно.
         if request.GET.get("status") != Trip.STATUS_DRAFT:
             qs = qs.exclude(status=Trip.STATUS_DRAFT)
 
+        # Дашборды считаются ПОСЛЕ всех пользовательских фильтров, но БЕЗ
+        # dashboard-параметров (status/no_driver/no_price) — иначе счётчики
+        # зависели бы от уже выбранной карточки и «схлопывались».
         dashboards = compute_dashboards(qs, visible_dashboards, dashboards_registry, request=request)
 
-        if request.GET.get("no_driver") == "1":
-            qs = qs.filter(legs__driver__isnull=True).distinct()
-        if request.GET.get("no_price") == "1":
-            qs = qs.filter(legs__price__isnull=True).distinct()
-
-        status_param = request.GET.get("status")
-        if status_param in (Trip.STATUS_COMPLETED, Trip.STATUS_IN_WORK, Trip.STATUS_DRAFT, Trip.STATUS_SENT_TO_WORK):
-            if status_param == Trip.STATUS_IN_WORK:
-                qs = qs.filter(status__in=[Trip.STATUS_SENT_TO_WORK, Trip.STATUS_IN_WORK])
-            else:
-                qs = qs.filter(status=status_param)
-
-        paginator = Paginator(qs, 50)
+        qs = apply_dashboard_params(qs, request)
+        paginator = Paginator(qs, PAGE_SIZE)
         page_obj = paginator.get_page(request.GET.get("page"))
 
     else: # requests (Логист)
@@ -174,18 +167,10 @@ def _build_list_context(request, *, kind):
         legs_qs = apply_filters(legs_base_queryset(), request.GET, visible_filters, filters_registry, is_leg=True)
         legs_qs = legs_qs.exclude(trip__status=Trip.STATUS_DRAFT)
 
+        # Дашборды считаются ПОСЛЕ всех пользовательских фильтров, но БЕЗ
+        # dashboard-параметров — те же правила, что и для заявок менеджера.
         dashboards = compute_dashboards(legs_qs, visible_dashboards, dashboards_registry, request=request)
-
-        if request.GET.get("no_driver") == "1":
-            legs_qs = legs_qs.filter(driver__isnull=True)
-        if request.GET.get("no_price") == "1":
-            legs_qs = legs_qs.filter(price__isnull=True)
-
-        status_param = request.GET.get("status")
-        if status_param == 'completed':
-            legs_qs = legs_qs.filter(transport_company__isnull=False, driver__isnull=False, vehicle__isnull=False, price__isnull=False, payment_type__isnull=False)
-        elif status_param == 'in_work':
-            legs_qs = legs_qs.exclude(transport_company__isnull=False, driver__isnull=False, vehicle__isnull=False, price__isnull=False, payment_type__isnull=False)
+        legs_qs = apply_dashboard_params(legs_qs, request)
 
         trip_ids = legs_qs.values_list('trip_id', flat=True).distinct()
 
@@ -198,7 +183,7 @@ def _build_list_context(request, *, kind):
             'manager', 'customer'
         ).prefetch_related(prefetch).order_by('-created_at')
 
-        paginator = Paginator(qs, 50)
+        paginator = Paginator(qs, PAGE_SIZE)
         page_obj = paginator.get_page(request.GET.get("page"))
 
     return {
@@ -371,7 +356,7 @@ def driver_trips_list(request):
     # 5. Поля и пагинация
     visible_fields = prefs.driver_trips_visible_fields or UserPreferences.DRIVER_TRIPS_DEFAULT_FIELDS
 
-    paginator = Paginator(qs, 50)
+    paginator = Paginator(qs, PAGE_SIZE)
     page_obj = paginator.get_page(request.GET.get("page"))
 
     all_tcs = TransportCompany.objects.all().order_by("name")

@@ -4,6 +4,7 @@
 
 import re
 from django.db import models
+from django.db.models import Q
 from django.db.models.deletion import ProtectedError
 from django.contrib.auth.models import AbstractUser
 
@@ -228,17 +229,27 @@ class Trip(models.Model):
         return all([self.loading_date, self.unloading_date, self.customer])
 
     def compute_status(self) -> str:
-        """Чистый расчет статуса без записи в БД."""
-        legs = list(self.legs.all())
-        if not legs:
-            return self.STATUS_SENT_TO_WORK if self.is_manager_filled() else self.STATUS_DRAFT
-        if all(leg.is_filled() for leg in legs):
+        """Чистый расчет статуса без записи в БД.
+
+        Единый источник истины для статусов (см. LEG_STATUS_SQL — там же
+        лежит эквивалентный SQL-фильтр). Пустые плечи не считаются ни
+        «в работе», ни «выполненными»: заявка из одних пустых плеч — это
+        sent_to_work, а не черновик и не «в работе».
+        """
+        if not self.is_manager_filled():
+            return self.STATUS_DRAFT
+        filled = started = 0
+        for leg in self.legs.all():
+            if leg.is_filled():
+                filled += 1
+            elif leg.is_started():
+                started += 1
+        total = self.legs.count()
+        if total and filled == total:
             return self.STATUS_COMPLETED
-        if any(leg.is_started() for leg in legs):
+        if filled or started:
             return self.STATUS_IN_WORK
-        if self.is_manager_filled():
-            return self.STATUS_SENT_TO_WORK
-        return self.STATUS_DRAFT
+        return self.STATUS_SENT_TO_WORK
 
     def refresh_status(self, save=True) -> bool:
         """Пересчитывает статус заявки. Возвращает True, если статус изменился.
@@ -300,7 +311,24 @@ class TripLeg(models.Model):
         return all([self.transport_company, self.driver, self.vehicle, self.price is not None, self.payment_type])
 
     def is_started(self) -> bool:
-        return any([self.transport_company, self.driver, self.vehicle, self.price is not None, self.payment_type, self.ttn_number])
+        return any([self.transport_company, self.driver, self.vehicle,
+                    self.price is not None, self.payment_type,
+                    self.ttn_number, self.logist_comment])
+
+    # --- SQL-эквиваленты (единый источник истины со статусной логикой) ---
+    # Заполненное плечо == completed. Эквивалент is_filled().
+    FILLED_SQL = Q(transport_company__isnull=False, driver__isnull=False,
+                   vehicle__isnull=False, price__isnull=False, payment_type__isnull=False)
+    # Начатое, но не заполненное плечо. Эквивалент is_started() AND NOT is_filled().
+    STARTED_SQL = (Q(transport_company__isnull=False) | Q(driver__isnull=False) |
+                   Q(vehicle__isnull=False) | Q(price__isnull=False) |
+                   Q(payment_type__isnull=False) | ~Q(ttn_number='') |
+                   ~Q(logist_comment='')) & ~FILLED_SQL
+    # Пустое плечо — эквивалент not is_started().
+    EMPTY_SQL = (Q(transport_company__isnull=True) & Q(driver__isnull=True) &
+                 Q(vehicle__isnull=True) & Q(price__isnull=True) &
+                 Q(payment_type__isnull=True) & Q(ttn_number='') &
+                 Q(logist_comment=''))
 
     @property
     def status(self) -> str:
