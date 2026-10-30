@@ -44,7 +44,7 @@
         <span class="fw-bold text-dark">Данные менеджера</span>
     </div>
     <div class="card-body">
-        <div class="d-flex flex-wrap gap-2">
+        <div class="request-row-tiles d-flex flex-wrap gap-2">
             <div class="data-box">
                 <span class="data-label">Дата загрузки</span>
                 <span class="data-value">{{ leg.trip.loading_date|format_date }}</span>
@@ -61,7 +61,7 @@
                 <span class="data-label">Заказчик</span>
                 <span class="data-value fw-semibold">{{ leg.trip.customer.name|default:"—" }}</span>
             </div>
-            <div class="data-box flex-grow-1" style="min-width: 250px;">
+            <div class="data-box row-tile-wide">
                 <span class="data-label">Информация по доставке</span>
                 <span class="data-value text-break">{{ leg.trip.delivery_info|default:"—" }}</span>
             </div>

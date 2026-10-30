@@ -153,10 +153,25 @@ a { text-decoration: none; }
     overflow-wrap: anywhere;
 }
 
-/* Списки заявок/рейсов: плитки имеют одинаковую базовую ширину на строку,
-   поэтому колонки во всех карточках ровные и текст не «уезжает» */
-.request-row-tiles > .data-box { flex: 1 1 130px; min-width: 130px; }
+/* Списки заявок/рейсов: плитки выстраиваются в РОВНУЮ сетку (CSS grid).
+   Одинаковое число колонок во всех карточках — ярлыки и значения стоят
+   строго друг под другом, текст переносится внутри ячейки и никуда не «уезжает». */
+.request-row-tiles {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px !important;
+}
+.request-row-tiles > .data-box { width: 100%; max-width: 100%; min-width: 0; }
 .request-row-tiles > .data-value { display: block; }
+/* Широкая плитка (например, «Информация по доставке») занимает всю строку */
+.request-row-tiles > .row-tile-wide { grid-column: 1 / -1; }
+
+/* Сетка плиток на странице рейсов водителей (bootstrap col-*):
+   аккуратные отступы, одинаковая высота ячеек в ряду, текст не выходит за плитки. */
+.driver-trips-grid { --bs-gutter-x: 8px; --bs-gutter-y: 8px; }
+.driver-trips-grid > [class*="col-"] { display: flex; }
+.driver-trips-grid > [class*="col-"] > .data-box { height: auto; }
+.driver-trips-grid .data-value.text-prewrap { white-space: pre-wrap; }
 
 /* Поля ввода внутри плиток — «плоский» вид */
 .data-box .form-control,
@@ -231,15 +246,23 @@ a { text-decoration: none; }
 .leg-row-editable:hover { box-shadow: var(--dils-shadow-hover); border-color: #b6d4fe !important; }
 .leg-num { font-size: 10px; flex-shrink: 0; }
 
-/* Фиксированные «доли» плиток в строке рейса: текст переносится внутри плитки,
-   а не растягивает её — колонки одинаковы во всех строках и ничего не «пляшет» */
-.leg-tc      { flex: 3 1 160px; min-width: 160px; max-width: 100%; }
-.leg-driver  { flex: 3 1 160px; min-width: 160px; max-width: 100%; }
-.leg-plate   { flex: 2 1 120px; min-width: 120px; max-width: 100%; }
-.leg-brand   { flex: 2 1 140px; min-width: 140px; max-width: 100%; }
-.leg-price   { flex: 2 1 110px; min-width: 110px; max-width: 100%; }
-.leg-payment { flex: 2 1 130px; min-width: 130px; max-width: 100%; }
-.leg-ttn     { flex: 1 1 90px;  min-width: 90px;  max-width: 100%; }
+/* Строка-рейс: плитки выстраиваются в ровную сетку (как карточки списков).
+   Колонки одинаковы во всех строках, длинные название ТК/водителя переносится
+   внутри ячейки, а не растягивает её. */
+.leg-row {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px !important;
+    align-items: stretch;
+}
+.leg-row > .data-box { width: 100%; max-width: 100%; min-width: 0; }
+.leg-row > .badge.leg-num { justify-self: start; align-self: center; }
+.leg-row > .w-100 { grid-column: 1 / -1; }
+.leg-row > .ms-auto { grid-column: 1 / -1; justify-content: flex-end; }
+@media (min-width: 1200px) {
+    /* на широких экранах статусы в правой колонке последней строки сетки */
+    .leg-row > .ms-auto { grid-column: auto; grid-row: 1; }
+}
 .leg-row .data-value.text-break { word-break: break-word; hyphens: auto; }
 
 /* ------- Формы и кнопки ------- */
