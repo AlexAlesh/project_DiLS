@@ -137,11 +137,40 @@ class TripManagerForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         customer = cleaned.get("customer")
+        # Создание нового заказчика по имени (скрытое поле new_customer_name).
+        if not customer:
+            raw_name = (self.data.get("new_customer_name") or "").strip() \
+                if hasattr(self.data, "get") else ""
+            if raw_name:
+                manager = self.user if (self.user and self.user.is_manager) else None
+                qs = Customer.objects.filter(name__iexact=raw_name)
+                if manager:
+                    qs = qs.filter(Q(manager=manager) | Q(manager__isnull=True))
+                existing = qs.distinct().first()
+                if existing:
+                    # Защита от дублей: переиспользуем существующего клиента.
+                    if not existing.manager and manager:
+                        existing.manager = manager
+                        existing.save(update_fields=["manager"])
+                    cleaned["customer"] = existing
+                    self.instance.customer = existing
+                    customer = existing
+                else:
+                    customer = Customer.objects.create(name=raw_name, manager=manager)
+                    cleaned["customer"] = customer
+                    self.instance.customer = customer
+
         if not customer:
             self.add_error("customer", "Выберите заказчика из списка.")
         elif customer and not customer.manager and self.user and self.user.is_manager:
             customer.manager = self.user
             customer.save()
+
+        # Проверка дат: разгрузка не раньше загрузки.
+        date_start = cleaned.get("loading_date")
+        date_end = cleaned.get("unloading_date")
+        if date_start and date_end and date_end < date_start:
+            self.add_error("unloading_date", "Дата разгрузки не может быть раньше даты загрузки.")
         return cleaned
 
     def save(self, commit=True):
@@ -187,7 +216,18 @@ class TripLogistForm(forms.ModelForm):
             "logist_comment": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
         }
 
-    # ... (остальной код __init__ и clean без изменений)
+    def clean(self):
+        cleaned = super().clean()
+        company = cleaned.get("transport_company")
+        driver = cleaned.get("driver")
+        vehicle = cleaned.get("vehicle")
+        # Водитель и машина должны принадлежать выбранной ТК.
+        if company:
+            if driver and driver.transport_company_id != company.pk:
+                self.add_error("driver", f"Водитель «{driver}» не принадлежит ТК «{company}».")
+            if vehicle and vehicle.transport_company_id != company.pk:
+                self.add_error("vehicle", f"Машина «{vehicle}» не принадлежит ТК «{company}».")
+        return cleaned
 
 
 # ============================================================
