@@ -38,9 +38,9 @@
             {% if user.is_logist or user.is_admin_role %}
             <a href="{% url 'core:request_list' %}" class="btn btn-light position-relative me-2" title="Новые заявки">
                 <i class="bi bi-bell"></i>
-                {% if new_requests_count %}
+                {% if new_legs_count %}
                 <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                    {{ new_requests_count }}
+                    {{ new_legs_count }}
                 </span>
                 {% endif %}
             </a>

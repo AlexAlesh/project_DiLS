@@ -3,18 +3,12 @@
 """
 
 from django import forms
-from django.contrib.auth.forms import AuthenticationForm
 from django.db.models import Q
 
 from .models import (
     Brand, Customer, CustomerAddress, Driver, PaymentType, TransportCompany,
     Trip, TripLeg, User, Vehicle, VehicleType, format_plate_number,
 )
-
-
-class LoginForm(AuthenticationForm):
-    username = forms.CharField(label="Логин", widget=forms.TextInput(attrs={"class": "form-control", "autofocus": True}))
-    password = forms.CharField(label="Пароль", widget=forms.PasswordInput(attrs={"class": "form-control"}))
 
 
 class ProfileForm(forms.ModelForm):
