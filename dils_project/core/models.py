@@ -391,6 +391,8 @@ class TripLeg(models.Model):
 
 class TripHistory(models.Model):
     trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='history', verbose_name='Заявка')
+    leg = models.ForeignKey('TripLeg', on_delete=models.CASCADE, null=True, blank=True,
+                            related_name='history', verbose_name='Рейс')
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name='Пользователь')
     field_name = models.CharField('Поле', max_length=100)
     old_value = models.TextField('Было', blank=True)
