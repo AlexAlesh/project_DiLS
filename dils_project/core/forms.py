@@ -264,6 +264,12 @@ class TripLogistForm(forms.ModelForm):
                 if cur is not None and qs is not None and not qs.filter(pk=getattr(cur, "pk", cur)).exists():
                     self.initial[fname] = None
 
+    def _drop_field(self, field_name):
+        """Убирает поле из cleaned_data, чтобы save(commit=False) не проставил
+        отвергнутый объект в экземпляр; значение остаётся только для показа ошибки."""
+        self.cleaned_data.pop(field_name, None)
+        self.initial.pop(field_name, None)
+
     def clean(self):
         cleaned = super().clean()
         company = cleaned.get("transport_company")
@@ -278,28 +284,24 @@ class TripLogistForm(forms.ModelForm):
                 model = Driver if field_name == "driver" else Vehicle
                 obj = cleaned.get(field_name)
                 if obj is None:
+                    # Поле отвергнуто на этапе to_python (например, значение
+                    # не прошло по queryset поля) — достаем объект напрямую.
                     raw_pk = self.data.get(field_name)
                     try:
                         obj = model.objects.filter(pk=raw_pk).first() if raw_pk else None
                     except (TypeError, ValueError):
                         obj = None
                     if obj is not None and obj.transport_company_id != company.pk:
-                        errs = self.errors.get(field_name) or []
-                        if any("корректный вариант" in str(e).lower() for e in errs):
-                            self._deleted_data.add(field_name)
-                            self.initial.pop(field_name, None)
-                            self.add_error(field_name, f"{label} «{obj}» не принадлежит ТК «{company}». Выберите {what} из списка этой компании.")
+                        self._drop_field(field_name)
+                        self.add_error(field_name, f"{label} «{obj}» не принадлежит ТК «{company}». Выберите {what} из списка этой компании.")
                     elif obj is not None and obj.transport_company_id == company.pk:
-                        # Значение корректно (оно есть в списке новой ТК), но
-                        # поле было отвергнуто кэшированным queryset'ом —
-                        # принимаем его явно, чтобы данные не «слетали» при
-                        # повторном сохранении карточки.
+                        # Значение корректно (оно есть в списке выбранной ТК), но
+                        # поле было отвергнуто — принимаем его явно, чтобы данные
+                        # не «слетали» при повторном сохранении карточки.
                         self.cleaned_data[field_name] = obj
                     continue
                 if obj.transport_company_id != company.pk:
-                    del self.cleaned_data[field_name]
-                    self._deleted_data.add(field_name)
-                    self.initial.pop(field_name, None)
+                    self._drop_field(field_name)
                     self.add_error(field_name, f"{label} «{obj}» не принадлежит ТК «{company}». Выберите {what} из списка этой компании.")
         return cleaned
 

@@ -12,6 +12,7 @@
 {% endcomment %}
 <div class="d-flex align-items-center gap-2 p-2 rounded border bg-white flex-wrap leg-row {% if editable %}leg-row-editable{% endif %}"
      {% if editable %}data-href="{{ edit_url }}"{% endif %}>
+    {# Навигация — только по двойному клику (общий обработчик dblclick в main.js). #}
 
     <span class="badge text-bg-secondary leg-num">Рейс #{{ index }}</span>
 

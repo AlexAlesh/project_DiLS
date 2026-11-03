@@ -85,8 +85,8 @@
 
             <div class="d-flex flex-column gap-2">
                 {% for leg in trip.legs.all %}
-                {% url 'core:request_edit' leg.pk as leg_edit_url %}
-                {% include "includes/leg_row.html" with leg=leg index=forloop.counter editable="1" edit_url=leg_edit_url show_new_badge="1" %}
+                {% url 'core:request_detail' leg.pk as leg_detail_url %}
+                {% include "includes/leg_row.html" with leg=leg index=forloop.counter editable="1" edit_url=leg_detail_url show_new_badge="1" %}
                 {% endfor %}
             </div>
         </div>
