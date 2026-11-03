@@ -11,7 +11,7 @@
 - empty_tc_text — текст для пустой ТК (по умолчанию «—»)
 {% endcomment %}
 <div class="d-flex align-items-center gap-2 p-2 rounded border bg-white flex-wrap leg-row {% if editable %}leg-row-editable{% endif %}"
-     {% if editable %}onclick="event.stopPropagation(); window.location.href='{{ edit_url }}'"{% endif %}>
+     {% if editable %}data-href="{{ edit_url }}"{% endif %}>
 
     <span class="badge text-bg-secondary leg-num">Рейс #{{ index }}</span>
 
