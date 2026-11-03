@@ -187,9 +187,9 @@ def apply_dashboard_params(qs, request):
         qs = qs.filter(TripLeg.FILLED_SQL) if leg else qs.filter(status=Trip.STATUS_COMPLETED)
     elif status_param == Trip.STATUS_IN_WORK:
         if leg:
-            # «В работе» = начатые, но не заполненные плечи
-            # (пустые сюда не попадают — см. compute_status()).
-            qs = qs.filter(TripLeg.STARTED_SQL)
+            # «В работе» = всё, что ещё не заполнено до конца (не выполнено):
+            # начатые + пустые плечи. Совпадает со счётчиком дашборда.
+            qs = qs.exclude(TripLeg.FILLED_SQL)
         else:
             qs = qs.filter(status__in=[Trip.STATUS_SENT_TO_WORK, Trip.STATUS_IN_WORK])
     elif status_param == Trip.STATUS_DRAFT:
@@ -262,7 +262,10 @@ TRIPS_DASHBOARDS = [
 # is_filled()/is_started(), чтобы Python- и SQL-логика не разъезжались.
 def _count_legs_all(qs): return qs.count()
 def _count_legs_completed(qs): return qs.filter(TripLeg.FILLED_SQL).count()
-def _count_legs_in_work(qs): return qs.filter(TripLeg.STARTED_SQL).count()
+def _count_legs_in_work(qs):
+    # «В работе» = всё, что ещё не заполнено до конца (не выполнено):
+    # начатые плечи + пустые. Совпадает с фильтром ?status=in_work.
+    return qs.exclude(TripLeg.FILLED_SQL).count()
 def _count_legs_sent_to_work(qs): return qs.filter(TripLeg.EMPTY_SQL).count()
 def _count_legs_no_driver(qs): return qs.filter(driver__isnull=True).count()
 def _count_legs_no_price(qs): return qs.filter(price__isnull=True).count()

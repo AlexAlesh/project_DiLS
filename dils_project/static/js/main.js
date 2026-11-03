@@ -274,6 +274,9 @@
 
     function initCardDoubleClick() {
         try {
+            // Повторный запуск (например из Turbo/htmx) не должен вешать обработчик дважды.
+            if (document.body && document.body.dataset.dilsDblclick === '1') return;
+            if (document.body) document.body.dataset.dilsDblclick = '1';
             document.querySelectorAll('.trip-card[data-href]').forEach(card => {
                 card.style.cursor = 'pointer';
                 card.title = "Двойной клик для просмотра деталей";
