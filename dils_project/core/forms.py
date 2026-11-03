@@ -253,6 +253,17 @@ class TripLogistForm(forms.ModelForm):
             self.fields["driver"].queryset = Driver.objects.none()
             self.fields["vehicle"].queryset = Vehicle.objects.none()
 
+        # Страховка для initial (редактирование сохранённого рейса): если
+        # сохранённые водитель/машина принадлежат другой ТК (например, их
+        # перенесли между компаниями), не подставляем их в форму — иначе
+        # ModelChoiceField отвергнет значение и при сохранении данные «слетят».
+        if not self.is_bound:
+            for fname, qs in (("driver", self.fields["driver"].queryset),
+                              ("vehicle", self.fields["vehicle"].queryset)):
+                cur = self.initial.get(fname)
+                if cur is not None and qs is not None and not qs.filter(pk=getattr(cur, "pk", cur)).exists():
+                    self.initial[fname] = None
+
     def clean(self):
         cleaned = super().clean()
         company = cleaned.get("transport_company")
@@ -267,21 +278,23 @@ class TripLogistForm(forms.ModelForm):
                 model = Driver if field_name == "driver" else Vehicle
                 obj = cleaned.get(field_name)
                 if obj is None:
-                    # Поле отклонено ModelChoiceField (значение из старой ТК) —
-                    # заменим стандартную ошибку на понятную.
                     raw_pk = self.data.get(field_name)
                     try:
                         obj = model.objects.filter(pk=raw_pk).first() if raw_pk else None
                     except (TypeError, ValueError):
                         obj = None
-                    if obj and obj.transport_company_id != company.pk:
+                    if obj is not None and obj.transport_company_id != company.pk:
                         errs = self.errors.get(field_name) or []
                         if any("корректный вариант" in str(e).lower() for e in errs):
-                            # Полностью снимаем поле с формы (как required=False),
-                            # чтобы чужое значение не осталось выбранным.
                             self._deleted_data.add(field_name)
                             self.initial.pop(field_name, None)
                             self.add_error(field_name, f"{label} «{obj}» не принадлежит ТК «{company}». Выберите {what} из списка этой компании.")
+                    elif obj is not None and obj.transport_company_id == company.pk:
+                        # Значение корректно (оно есть в списке новой ТК), но
+                        # поле было отвергнуто кэшированным queryset'ом —
+                        # принимаем его явно, чтобы данные не «слетали» при
+                        # повторном сохранении карточки.
+                        self.cleaned_data[field_name] = obj
                     continue
                 if obj.transport_company_id != company.pk:
                     del self.cleaned_data[field_name]

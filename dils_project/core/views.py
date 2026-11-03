@@ -296,13 +296,32 @@ def request_edit(request, pk):
             save_logist_part(leg, form)
             mark_as_viewed(leg)
             messages.success(request, "Рейс обновлён.")
-            return redirect("core:request_list")
+            return redirect("core:request_detail", pk=leg.pk)
     else:
         form = TripLogistForm(instance=leg)
 
     mark_as_viewed(leg)
     return render(request, "requests/form.html", {
         "form": form, "leg": leg, "leg_ordinal": leg_ordinal
+    })
+
+
+@role_required(User.ROLE_LOGIST)
+def request_detail(request, pk):
+    """Детальная карточка рейса (открывается по двойному клику из списка)."""
+    leg = get_object_or_404(legs_base_queryset(), pk=pk)
+    if leg.trip.status == Trip.STATUS_DRAFT:
+        raise PermissionDenied
+
+    leg_ids = list(leg.trip.legs.order_by('id').values_list('id', flat=True))
+    try:
+        leg_ordinal = leg_ids.index(leg.pk) + 1
+    except ValueError:
+        leg_ordinal = 1
+
+    mark_as_viewed(leg)
+    return render(request, "requests/detail.html", {
+        "leg": leg, "leg_ordinal": leg_ordinal
     })
 
 

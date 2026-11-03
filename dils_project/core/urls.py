@@ -20,6 +20,7 @@ urlpatterns = [
 
     # Рейсы (Логист)
     path("requests/", views.request_list, name="request_list"),
+    path("requests/<int:pk>/", views.request_detail, name="request_detail"),
     path("requests/<int:pk>/edit/", views.request_edit, name="request_edit"),
     path("requests/<int:pk>/mark-viewed/", views.request_mark_viewed, name="request_mark_viewed"),
 

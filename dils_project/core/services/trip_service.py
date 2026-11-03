@@ -135,5 +135,9 @@ def mark_as_viewed(leg: TripLeg) -> None:
     """Помечает рейс как просмотренный логистом."""
     if not leg.logist_viewed:
         leg.logist_viewed = True
-        # Флаг просмотра не влияет на статус — пересчет не нужен.
-        leg.save(update_fields=["logist_viewed"], _skip_trip_refresh=True)
+        # Флаг просмотра не влияет на статус и не должен попадать в историю.
+        leg._skip_history = True
+        try:
+            leg.save(update_fields=["logist_viewed"], _skip_trip_refresh=True)
+        finally:
+            del leg._skip_history
