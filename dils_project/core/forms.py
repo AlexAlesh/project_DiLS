@@ -229,17 +229,65 @@ class TripLogistForm(forms.ModelForm):
             "logist_comment": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Список ТК всегда полный.
+        self.fields["transport_company"].queryset = TransportCompany.objects.order_by("name")
+        # Водитель и машина зависят от ТК:
+        #  - bound-форма (POST): фильтруем по ТК из данных — при смене компании
+        #    в списках сразу появляются водители/машины новой ТК;
+        #  - GET-форма: фильтруем по ТК, уже сохранённой в рейсе.
+        tc_id = None
+        if self.is_bound:
+            tc_id = self.data.get("transport_company") or None
+        elif self.instance is not None and self.instance.pk is not None:
+            tc_id = TripLeg.objects.filter(
+                pk=self.instance.pk).values_list("transport_company_id", flat=True).first()
+        if tc_id:
+            self.fields["driver"].queryset = Driver.objects.filter(
+                transport_company_id=tc_id).order_by("full_name")
+            self.fields["vehicle"].queryset = Vehicle.objects.filter(
+                transport_company_id=tc_id).select_related("brand").order_by(
+                "plate_number")
+        else:
+            self.fields["driver"].queryset = Driver.objects.none()
+            self.fields["vehicle"].queryset = Vehicle.objects.none()
+
     def clean(self):
         cleaned = super().clean()
         company = cleaned.get("transport_company")
-        driver = cleaned.get("driver")
-        vehicle = cleaned.get("vehicle")
-        # Водитель и машина должны принадлежать выбранной ТК.
+        # Если после смены ТК остались старые водитель/машина другой компании —
+        # снимаем их с формы, чтобы они не «залипали» выбранными, и просим
+        # логиста выбрать данные из списка новой компании.
         if company:
-            if driver and driver.transport_company_id != company.pk:
-                self.add_error("driver", f"Водитель «{driver}» не принадлежит ТК «{company}».")
-            if vehicle and vehicle.transport_company_id != company.pk:
-                self.add_error("vehicle", f"Машина «{vehicle}» не принадлежит ТК «{company}».")
+            for field_name, label, what in (
+                ("driver", "Водитель", "водителя"),
+                ("vehicle", "Машина", "машину"),
+            ):
+                model = Driver if field_name == "driver" else Vehicle
+                obj = cleaned.get(field_name)
+                if obj is None:
+                    # Поле отклонено ModelChoiceField (значение из старой ТК) —
+                    # заменим стандартную ошибку на понятную.
+                    raw_pk = self.data.get(field_name)
+                    try:
+                        obj = model.objects.filter(pk=raw_pk).first() if raw_pk else None
+                    except (TypeError, ValueError):
+                        obj = None
+                    if obj and obj.transport_company_id != company.pk:
+                        errs = self.errors.get(field_name) or []
+                        if any("корректный вариант" in str(e).lower() for e in errs):
+                            # Полностью снимаем поле с формы (как required=False),
+                            # чтобы чужое значение не осталось выбранным.
+                            self._deleted_data.add(field_name)
+                            self.initial.pop(field_name, None)
+                            self.add_error(field_name, f"{label} «{obj}» не принадлежит ТК «{company}». Выберите {what} из списка этой компании.")
+                    continue
+                if obj.transport_company_id != company.pk:
+                    del self.cleaned_data[field_name]
+                    self._deleted_data.add(field_name)
+                    self.initial.pop(field_name, None)
+                    self.add_error(field_name, f"{label} «{obj}» не принадлежит ТК «{company}». Выберите {what} из списка этой компании.")
         return cleaned
 
 

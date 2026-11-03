@@ -131,10 +131,13 @@
 
             const tcId = tcSelect.value;
             const clearSelect = (sel) => {
-                if (sel && sel.tomselect) {
-                    sel.tomselect.clearOptions();
-                    sel.tomselect.clear();
-                }
+                if (!sel || !sel.tomselect) return;
+                const ts = sel.tomselect;
+                Object.keys(ts.options || {}).forEach(v => {
+                    if (v !== '') ts.removeOption(v);
+                });
+                ts.clear();
+                ts.refreshOptions(false);
             };
 
             if (!tcId) {
@@ -149,10 +152,19 @@
                 getJSON('/ajax/selects/vehicles/', params)
             ]).then(([drivers, vehicles]) => {
                 const fill = (sel, items) => {
-                    if (sel && sel.tomselect) {
-                        items.forEach(it => sel.tomselect.addOption({ value: it.id, text: it.text }));
-                        sel.tomselect.refreshOptions(false);
+                    if (!sel || !sel.tomselect) return;
+                    const ts = sel.tomselect;
+                    const allowed = new Set((items || []).map(String));
+                    // Убираем опции, которые уже НЕ относятся к выбранной ТК.
+                    ts.options && Object.keys(ts.options).forEach(v => {
+                        if (v !== '' && !allowed.has(String(v))) ts.removeOption(v);
+                    });
+                    (items || []).forEach(it => ts.addOption({ value: it.id, text: it.text }));
+                    // Если текущее значение больше не принадлежит ТК — сбрасываем его.
+                    if (ts.getValue() && !allowed.has(String(ts.getValue()))) {
+                        ts.clear();
                     }
+                    ts.refreshOptions(false);
                 };
                 fill(driverSelect, drivers.results || []);
                 fill(vehicleSelect, vehicles.results || []);
