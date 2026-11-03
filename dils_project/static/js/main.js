@@ -277,13 +277,17 @@
             // Повторный запуск (например из Turbo/htmx) не должен вешать обработчик дважды.
             if (document.body && document.body.dataset.dilsDblclick === '1') return;
             if (document.body) document.body.dataset.dilsDblclick = '1';
-            document.querySelectorAll('.trip-card[data-href]').forEach(card => {
+            // Общий обработчик: двойной клик по карточке или плитке рейса ведёт в data-href.
+            // Один раз на document — работает и для .trip-card, и для строк leg_row.
+            document.addEventListener('dblclick', function (e) {
+                const el = e.target.closest('[data-href]');
+                if (!el) return;
+                if (e.target.closest('a, button, input, select, textarea, form')) return;
+                window.location.href = el.getAttribute('data-href');
+            });
+            document.querySelectorAll('.trip-card[data-href], .leg-row-editable[data-href]').forEach(card => {
                 card.style.cursor = 'pointer';
                 card.title = "Двойной клик для просмотра деталей";
-                card.addEventListener('dblclick', function (e) {
-                    if (e.target.closest('a, button, input, select, textarea, form')) return;
-                    window.location.href = card.dataset.href;
-                });
             });
         } catch (e) {}
     }

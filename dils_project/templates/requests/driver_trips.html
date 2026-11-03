@@ -49,7 +49,8 @@
 {# ================= СПИСОК РЕЙСОВ ================= #}
 <div class="d-flex flex-column gap-2">
     {% for leg in page_obj %}
-    <div class="card shadow-sm border-0 mb-2">
+    <div class="card shadow-sm border-0 mb-2 trip-card"
+         data-href="{% url 'core:request_edit' leg.pk %}">
         <div class="card-body p-3 position-relative">
 
             {# Шапка карточки: Номер рейса + ФИО водителя, и кнопка редактирования #}
@@ -176,7 +177,7 @@
                 {% endif %}
 
                 {% if 'comment' in visible_fields %}
-                <div class="col-12">
+                <div class="col-md-6 col-sm-8">
                     <div class="data-box w-100">
                         <span class="data-label">Комментарий</span>
                         <span class="data-value text-break text-prewrap">{{ leg.logist_comment|default:"—" }}</span>
